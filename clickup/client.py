@@ -13,7 +13,7 @@ from sync.parser import Opportunity
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://api.clickup.com/api/v2"
+_BASE_URL = "https://api.clickup-stg.com/api/v2"
 _MAX_RETRIES = 3
 
 
