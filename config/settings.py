@@ -27,9 +27,10 @@ def _optional(key: str, default: str = "") -> str:
 
 @dataclass
 class Settings:
-    # --- Gmail ---
-    gmail_credentials_file: str
-    gmail_token_file: str
+    # --- Gmail (IMAP + App Password) ---
+    gmail_address: str
+    gmail_app_password: str
+    gmail_imap_host: str
     gmail_subject_pattern: str
     gmail_attachment_name_pattern: str
 
@@ -149,8 +150,9 @@ def load_settings() -> Settings:
     closed_stages = [s.strip() for s in closed_stages_raw.split(",") if s.strip()]
 
     return Settings(
-        gmail_credentials_file=_optional("GMAIL_CREDENTIALS_FILE", "auth/credentials.json"),
-        gmail_token_file=_optional("GMAIL_TOKEN_FILE", "auth/token.json"),
+        gmail_address=_require("GMAIL_ADDRESS"),
+        gmail_app_password=_require("GMAIL_APP_PASSWORD"),
+        gmail_imap_host=_optional("GMAIL_IMAP_HOST", "imap.gmail.com"),
         gmail_subject_pattern=_optional("GMAIL_SUBJECT_PATTERN", "Salesforce Opportunity"),
         gmail_attachment_name_pattern=_optional("GMAIL_ATTACHMENT_NAME_PATTERN", ".csv"),
         clickup_api_token=_require("CLICKUP_API_TOKEN"),

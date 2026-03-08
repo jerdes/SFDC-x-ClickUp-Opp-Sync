@@ -16,12 +16,16 @@ All 34 Salesforce report fields are synced as ClickUp custom fields.
 
 ## One-time setup
 
-### 1. Google Cloud — Gmail API credentials
+### 1. Enable Gmail IMAP and generate an App Password
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project.
-2. Enable the **Gmail API** (APIs & Services → Library).
-3. Create an **OAuth 2.0 Client ID** (APIs & Services → Credentials → Create Credentials → OAuth client ID → Desktop app).
-4. Download the JSON and save it as `auth/credentials.json`.
+No Google Cloud Console or OAuth needed — just two settings in your Google Account:
+
+1. **Enable IMAP:** Gmail → Settings (gear icon) → See all settings → Forwarding and POP/IMAP → Enable IMAP → Save Changes.
+
+2. **Generate an App Password** (requires 2-Step Verification to be on):
+   - Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   - Select app: **Mail**, device: **Other** → name it "ClickUp Sync" → Generate
+   - Copy the 16-character password shown — you'll paste it into `.env`
 
 ### 2. Install Python dependencies
 
@@ -31,6 +35,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Only 2 packages: `python-dotenv` and `requests`. Gmail uses Python's built-in `imaplib`.
+
 ### 3. Configure `.env`
 
 ```bash
@@ -38,6 +44,8 @@ cp .env.example .env
 ```
 
 Fill in at minimum:
+- `GMAIL_ADDRESS` — your Gmail address
+- `GMAIL_APP_PASSWORD` — the 16-character App Password from step 1
 - `CLICKUP_API_TOKEN` — your ClickUp personal API token (Settings → Apps)
 - `CLICKUP_LIST_ID` — the list ID from the ClickUp URL
 
@@ -54,15 +62,7 @@ curl -s -H "Authorization: YOUR_CLICKUP_TOKEN" \
 
 Copy each field's `id` into the corresponding `CLICKUP_FIELD_ID_*` variable in `.env`.
 
-### 5. Run the OAuth consent flow (one-time, interactive)
-
-```bash
-python3 main.py
-```
-
-A browser window will open asking you to authorize Gmail access. After approving, `auth/token.json` is saved. All future runs are headless.
-
-### 6. Set up cron
+### 5. Set up cron
 
 Open your crontab:
 
@@ -101,8 +101,7 @@ Logs are written to `logs/sync.log` (rotating, 5 MB × 5 files).
 SFDC-x-ClickUp-Opp-Sync/
 ├── main.py                  # Entry point
 ├── config/settings.py       # All configuration
-├── auth/gmail_auth.py       # Gmail OAuth2
-├── gmail/client.py          # Fetch CSV from Gmail
+├── gmail/client.py          # Fetch CSV via IMAP (no OAuth needed)
 ├── sync/
 │   ├── parser.py            # CSV → Opportunity objects
 │   ├── matcher.py           # Match to ClickUp tasks
@@ -122,7 +121,9 @@ SFDC-x-ClickUp-Opp-Sync/
 | Symptom | Fix |
 |---|---|
 | `Missing required environment variable: CLICKUP_API_TOKEN` | Copy `.env.example` → `.env` and fill in the token |
-| `No Gmail messages found matching subject` | Check `GMAIL_SUBJECT_PATTERN` matches your report email's subject exactly |
-| `Email has no attachment matching '.csv'` | Check `GMAIL_ATTACHMENT_NAME_PATTERN`; try setting it to just `.csv` |
+| `Missing required environment variable: GMAIL_ADDRESS` | Copy `.env.example` → `.env` and fill in your Gmail address and App Password |
+| `IMAP login failed` / authentication error | App Password is wrong or IMAP isn't enabled — double-check both Gmail settings |
+| `No emails found matching subject` | Check `GMAIL_SUBJECT_PATTERN` matches your report email's subject exactly (partial match is fine) |
+| `No attachment matching '.csv'` | Check `GMAIL_ATTACHMENT_NAME_PATTERN`; `.csv` matches any file ending in .csv |
 | ClickUp tasks created but fields are blank | Field IDs in `.env` are wrong — re-run the `GET /field` curl and re-copy the UUIDs |
-| `CLICKUP_FIELD_ID_SF_OPPORTUNITY_ID is not set` | This field is required — create it in ClickUp and add its UUID to `.env` |
+| `CLICKUP_FIELD_ID_SF_OPPORTUNITY_ID is not set` | This field is required — create it in ClickUp (Text type) and add its UUID to `.env` |

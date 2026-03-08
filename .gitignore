@@ -1,6 +1,4 @@
 .env
-auth/token.json
-auth/credentials.json
 logs/*.log
 __pycache__/
 *.pyc

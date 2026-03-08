@@ -29,30 +29,23 @@ def main() -> int:
     logger.info("=== Salesforce → ClickUp sync starting ===")
 
     try:
-        # 3. Authenticate with Gmail
-        from auth.gmail_auth import get_gmail_service
-
-        logger.info("Authenticating with Gmail...")
-        gmail_service = get_gmail_service(
-            settings.gmail_credentials_file,
-            settings.gmail_token_file,
-        )
-
-        # 4. Fetch the latest CSV attachment from Gmail
+        # 3. Fetch the latest CSV attachment from Gmail via IMAP
         from gmail.client import fetch_latest_csv_attachment
 
         logger.info(
-            "Searching Gmail for subject='%s', attachment='%s'...",
+            "Connecting to Gmail IMAP as %s, searching for subject='%s'...",
+            settings.gmail_address,
             settings.gmail_subject_pattern,
-            settings.gmail_attachment_name_pattern,
         )
         csv_bytes = fetch_latest_csv_attachment(
-            gmail_service,
-            settings.gmail_subject_pattern,
-            settings.gmail_attachment_name_pattern,
+            address=settings.gmail_address,
+            app_password=settings.gmail_app_password,
+            imap_host=settings.gmail_imap_host,
+            subject_pattern=settings.gmail_subject_pattern,
+            attachment_name_pattern=settings.gmail_attachment_name_pattern,
         )
 
-        # 5. Parse the CSV
+        # 4. Parse the CSV
         from sync.parser import parse_csv
 
         logger.info("Parsing CSV...")
@@ -62,7 +55,7 @@ def main() -> int:
             logger.warning("No valid opportunities found in CSV. Nothing to sync.")
             return 0
 
-        # 6. Run the sync
+        # 5. Run the sync
         from clickup.client import ClickUpClient
         from sync.engine import run_sync
 
@@ -78,7 +71,7 @@ def main() -> int:
             closed_stages=settings.clickup_closed_stages,
         )
 
-        # 7. Log final summary
+        # 6. Log final summary
         logger.info(
             "=== Sync finished: created=%d updated=%d closed=%d errors=%d ===",
             summary.created,
