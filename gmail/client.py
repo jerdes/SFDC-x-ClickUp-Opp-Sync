@@ -50,7 +50,7 @@ def fetch_latest_csv_attachment(
         imap.login(address, app_password)
         logger.debug("IMAP login successful.")
 
-        imap.select("INBOX", readonly=True)
+        imap.select('"[Gmail]/All Mail"', readonly=True)
 
         # Search for messages with the subject pattern
         search_criterion = f'SUBJECT "{subject_pattern}"'
@@ -61,30 +61,28 @@ def fetch_latest_csv_attachment(
                 "Check GMAIL_SUBJECT_PATTERN in .env."
             )
 
-        # IMAP search returns message IDs oldest-first; reverse to get newest first
+        # IMAP search returns message IDs oldest-first; take the last (most recent)
         message_ids = data[0].split()
-        message_ids.reverse()
+        most_recent_id = message_ids[-1]
 
         logger.info(
-            "Found %d email(s) matching subject '%s'. Checking most recent ones.",
+            "Found %d email(s) matching subject '%s'. Checking most recent only.",
             len(message_ids),
             subject_pattern,
         )
 
-        for msg_id in message_ids[:10]:  # check up to 10 most recent matches
-            csv_bytes = _try_fetch_attachment(imap, msg_id, attachment_name_pattern)
-            if csv_bytes is not None:
-                logger.info(
-                    "Downloaded CSV attachment (%d bytes) from message id=%s",
-                    len(csv_bytes),
-                    msg_id.decode(),
-                )
-                return csv_bytes
+        csv_bytes = _try_fetch_attachment(imap, most_recent_id, attachment_name_pattern)
+        if csv_bytes is not None:
+            logger.info(
+                "Downloaded CSV attachment (%d bytes) from message id=%s",
+                len(csv_bytes),
+                most_recent_id.decode(),
+            )
+            return csv_bytes
 
         raise FileNotFoundError(
-            f"None of the {min(len(message_ids), 10)} most recent matching emails "
-            f"contained an attachment matching '{attachment_name_pattern}'. "
-            "Check GMAIL_ATTACHMENT_NAME_PATTERN in .env."
+            f"The most recent matching email did not contain an attachment matching "
+            f"'{attachment_name_pattern}'. Check GMAIL_ATTACHMENT_NAME_PATTERN in .env."
         )
 
 
