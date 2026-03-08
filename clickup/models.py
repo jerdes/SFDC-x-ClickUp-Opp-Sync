@@ -3,6 +3,12 @@ clickup/models.py — Helpers for working with ClickUp task dicts.
 """
 from __future__ import annotations
 
+import logging
+import re
+from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
+
 
 def get_custom_field_value(task: dict, field_id: str) -> str | None:
     """
@@ -22,6 +28,44 @@ def get_custom_field_value(task: dict, field_id: str) -> str | None:
                 return None
             return str(value)
     return None
+
+
+def _to_timestamp_ms(date_str: str) -> int | None:
+    """
+    Convert a date string to Unix timestamp in milliseconds (required by ClickUp date fields).
+    Handles formats Salesforce commonly exports: M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD.
+    Returns None if parsing fails.
+    """
+    formats = ("%m/%d/%Y", "%Y-%m-%d", "%m-%d-%Y", "%d/%m/%Y")
+    clean = date_str.strip()
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(clean, fmt).replace(tzinfo=timezone.utc)
+            return int(dt.timestamp() * 1000)
+        except ValueError:
+            continue
+    logger.warning("Could not parse date '%s' — skipping field.", date_str)
+    return None
+
+
+def _to_number(value_str: str) -> float | None:
+    """
+    Convert a currency/number string to a float.
+    Strips leading $, commas, whitespace.  Returns None on failure.
+    """
+    clean = re.sub(r"[$,\s]", "", value_str.strip())
+    try:
+        return float(clean)
+    except ValueError:
+        logger.warning("Could not parse number '%s' — skipping field.", value_str)
+        return None
+
+
+# Canonical names that map to ClickUp date fields (require Unix ms timestamps)
+_DATE_FIELDS = {"close_date", "next_step_date", "created_date"}
+
+# Canonical names that map to ClickUp currency or number fields (require numeric values)
+_NUMBER_FIELDS = {"arr", "sales_estimated_quota_relief", "number_of_plan_seats"}
 
 
 def build_custom_fields_payload(
@@ -92,14 +136,26 @@ def build_custom_fields_payload(
     for canonical, value in field_values.items():
         field_id = field_ids.get(canonical)
         if not field_id:
-            continue  # field not configured in .env — skip silently
+            continue  # field not configured — skip silently
 
         if canonical in _CHECKBOX_FIELDS:
-            # Normalize checkbox values to ClickUp boolean (true/false)
             bool_val = value.strip().lower() in ("true", "yes", "1", "checked", "✓")
             payload.append({"id": field_id, "value": bool_val})
+
+        elif canonical in _DATE_FIELDS:
+            if value:
+                ts = _to_timestamp_ms(value)
+                if ts is not None:
+                    payload.append({"id": field_id, "value": ts})
+
+        elif canonical in _NUMBER_FIELDS:
+            if value:
+                num = _to_number(value)
+                if num is not None:
+                    payload.append({"id": field_id, "value": num})
+
         else:
-            # Only include non-empty text/date/number values
+            # text / short_text / url — pass as-is
             if value:
                 payload.append({"id": field_id, "value": value})
 
