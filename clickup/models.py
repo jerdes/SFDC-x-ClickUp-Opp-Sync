@@ -67,6 +67,13 @@ _DATE_FIELDS = {"close_date", "next_step_date", "created_date"}
 # Canonical names that map to ClickUp currency or number fields (require numeric values)
 _NUMBER_FIELDS = {"sales_estimated_quota_relief"}
 
+# Canonical names that map to ClickUp url fields (value must start with http/https)
+_URL_FIELDS = {"map_url", "three_whys"}
+
+
+def _is_valid_url(value: str) -> bool:
+    return value.startswith("http://") or value.startswith("https://")
+
 
 def build_custom_fields_payload(
     opportunity: "Opportunity",  # type: ignore[name-defined]  # forward ref
@@ -146,8 +153,18 @@ def build_custom_fields_payload(
                 if num is not None:
                     payload.append({"id": field_id, "value": num})
 
+        elif canonical in _URL_FIELDS:
+            if value:
+                if _is_valid_url(value):
+                    payload.append({"id": field_id, "value": value})
+                else:
+                    logger.warning(
+                        "Skipping '%s' for field '%s' — not a valid URL (must start with http/https).",
+                        value, canonical,
+                    )
+
         else:
-            # text / short_text / url — pass as-is
+            # text / short_text — pass as-is
             if value:
                 payload.append({"id": field_id, "value": value})
 
