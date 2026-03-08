@@ -160,3 +160,64 @@ def build_custom_fields_payload(
                 payload.append({"id": field_id, "value": value})
 
     return payload
+
+
+def _values_equal(target, current) -> bool:
+    """
+    Compare a target value (already converted from CSV) with the current value
+    returned by the ClickUp API.  Returns True when they represent identical data.
+    """
+    # current absent / empty → always different (target is non-empty by construction)
+    if current is None or current == "":
+        return False
+
+    # Checkbox: bool target, ClickUp may return Python bool, 0/1, or "true"/"false"
+    if isinstance(target, bool):
+        if isinstance(current, bool):
+            return target == current
+        try:
+            return target == (str(current).lower() in ("true", "1", "yes"))
+        except Exception:  # noqa: BLE001
+            return False
+
+    # Date (int ms) or number/currency (float) — compare numerically with small tolerance
+    if isinstance(target, (int, float)):
+        try:
+            return abs(float(target) - float(current)) < 1
+        except (ValueError, TypeError):
+            return False
+
+    # Text / short_text / url — plain string comparison
+    return str(target).strip() == str(current).strip()
+
+
+def get_changed_fields_payload(
+    opportunity: "Opportunity",  # type: ignore[name-defined]
+    existing_task: dict,
+    field_ids: dict[str, str],
+) -> list[dict]:
+    """
+    Return a custom_fields payload containing only fields whose target value
+    (from the CSV) differs from the current value stored in the ClickUp task.
+
+    Args:
+        opportunity: Parsed Opportunity with CSV values.
+        existing_task: The full task dict returned by the ClickUp API.
+        field_ids: Maps canonical field name -> ClickUp custom field UUID.
+
+    Returns:
+        Subset of build_custom_fields_payload(opportunity, field_ids) containing
+        only entries where the value has changed.
+    """
+    target_payload = build_custom_fields_payload(opportunity, field_ids)
+
+    # Index current ClickUp field values by field UUID
+    current_by_id: dict[str, object] = {
+        cf["id"]: cf.get("value")
+        for cf in existing_task.get("custom_fields", [])
+    }
+
+    return [
+        item for item in target_payload
+        if not _values_equal(item["value"], current_by_id.get(item["id"]))
+    ]

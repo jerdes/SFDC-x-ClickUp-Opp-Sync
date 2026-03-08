@@ -8,8 +8,7 @@ import time
 
 import requests
 
-from clickup.models import build_custom_fields_payload
-from sync.parser import Opportunity
+
 
 logger = logging.getLogger(__name__)
 
@@ -74,52 +73,35 @@ class ClickUpClient:
         logger.info("Fetched %d total tasks from ClickUp list %s", len(tasks), self._list_id)
         return tasks
 
-    def create_task(self, opportunity: Opportunity, field_ids: dict[str, str]) -> dict:
+    def create_task(self, name: str, custom_fields: list[dict]) -> dict:
         """
-        Create a new ClickUp task for the given opportunity.
+        Create a new ClickUp task.
         Returns the created task dict.
         """
-        custom_fields = build_custom_fields_payload(opportunity, field_ids)
-        body: dict = {
-            "name": opportunity.name,
-            "custom_fields": custom_fields,
-        }
+        body: dict = {"name": name, "custom_fields": custom_fields}
         task = self._post(f"/list/{self._list_id}/task", body)
-        logger.debug("Created task id=%s for SF id=%s", task.get("id"), opportunity.sf_opportunity_id)
+        logger.debug("Created task id=%s name='%s'", task.get("id"), name)
         return task
 
-    def update_task(self, task_id: str, opportunity: Opportunity, field_ids: dict[str, str]) -> dict:
+    def update_task(self, task_id: str, name: str, custom_fields: list[dict]) -> dict:
         """
-        Update an existing ClickUp task with the latest opportunity data.
+        Update a ClickUp task's name and/or a subset of its custom fields.
+        Pass only the fields that have changed; unchanged fields are omitted.
         Returns the updated task dict.
         """
-        custom_fields = build_custom_fields_payload(opportunity, field_ids)
-        body: dict = {
-            "name": opportunity.name,
-            "custom_fields": custom_fields,
-        }
+        body: dict = {"name": name, "custom_fields": custom_fields}
         task = self._put(f"/task/{task_id}", body)
-        logger.debug("Updated task id=%s for SF id=%s", task_id, opportunity.sf_opportunity_id)
+        logger.debug("Updated task id=%s", task_id)
         return task
 
-    def close_task(self, task_id: str, opportunity: Opportunity, field_ids: dict[str, str]) -> dict:
+    def close_orphan_task(self, task_id: str) -> dict:
         """
-        Update the task's custom fields with final stage data and mark it closed.
-        Returns the final task dict.
+        Mark a ClickUp task as closed without touching its custom fields.
+        Used when a task's SF Opportunity ID no longer appears in the CSV.
+        Returns the updated task dict.
         """
-        custom_fields = build_custom_fields_payload(opportunity, field_ids)
-        body: dict = {
-            "name": opportunity.name,
-            "status": "closed",
-            "custom_fields": custom_fields,
-        }
-        task = self._put(f"/task/{task_id}", body)
-        logger.debug(
-            "Closed task id=%s (stage=%s) for SF id=%s",
-            task_id,
-            opportunity.stage,
-            opportunity.sf_opportunity_id,
-        )
+        task = self._put(f"/task/{task_id}", {"status": "closed"})
+        logger.debug("Closed orphan task id=%s", task_id)
         return task
 
     # ------------------------------------------------------------------

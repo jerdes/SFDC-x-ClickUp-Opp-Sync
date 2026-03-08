@@ -37,7 +37,6 @@ class Settings:
     # --- ClickUp ---
     clickup_api_token: str
     clickup_list_id: str
-    clickup_closed_stages: list[str]
 
     # ClickUp custom field IDs (one per synced column)
     clickup_field_ids: dict[str, str]
@@ -146,9 +145,6 @@ def load_settings() -> Settings:
         # Missing field IDs are allowed at load time; the engine will skip them
         # with a warning rather than crashing — useful during initial setup.
 
-    closed_stages_raw = _optional("CLICKUP_CLOSED_STAGES", "Closed Won,Closed Lost")
-    closed_stages = [s.strip() for s in closed_stages_raw.split(",") if s.strip()]
-
     return Settings(
         gmail_address=_require("GMAIL_ADDRESS"),
         gmail_app_password=_require("GMAIL_APP_PASSWORD"),
@@ -157,7 +153,6 @@ def load_settings() -> Settings:
         gmail_attachment_name_pattern=_optional("GMAIL_ATTACHMENT_NAME_PATTERN", ".csv"),
         clickup_api_token=_require("CLICKUP_API_TOKEN"),
         clickup_list_id=_require("CLICKUP_LIST_ID"),
-        clickup_closed_stages=closed_stages,
         clickup_field_ids=clickup_field_ids,
         csv_field_map=csv_field_map,
         log_file=_optional("LOG_FILE", "logs/sync.log"),

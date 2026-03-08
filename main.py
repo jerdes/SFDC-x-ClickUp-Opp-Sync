@@ -99,15 +99,15 @@ def main() -> int:
             clickup_client=clickup_client,
             sf_id_field_id=sf_id_field_id,
             field_ids=settings.clickup_field_ids,
-            closed_stages=settings.clickup_closed_stages,
         )
 
         # 6. Log final summary
         logger.info(
-            "=== Sync finished: created=%d updated=%d closed=%d errors=%d ===",
+            "=== Sync finished: created=%d updated=%d closed=%d skipped=%d errors=%d ===",
             summary.created,
             summary.updated,
             summary.closed,
+            summary.skipped,
             len(summary.errors),
         )
 
