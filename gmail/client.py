@@ -54,7 +54,7 @@ def fetch_latest_csv_attachment(
         _, mailboxes = imap.list()
         logger.info("Available IMAP mailboxes: %s", [m.decode() for m in mailboxes if m])
 
-        status, select_data = imap.select('[Gmail]/All Mail', readonly=True)
+        status, select_data = imap.select('"[Gmail]/All Mail"', readonly=True)
         if status != "OK":
             raise FileNotFoundError(
                 "Could not select '[Gmail]/All Mail'. "
