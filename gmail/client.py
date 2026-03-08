@@ -50,15 +50,21 @@ def fetch_latest_csv_attachment(
         imap.login(address, app_password)
         logger.debug("IMAP login successful.")
 
-        status, _ = imap.select('[Gmail]/All Mail', readonly=True)
+        # List available mailboxes for debugging
+        _, mailboxes = imap.list()
+        logger.info("Available IMAP mailboxes: %s", [m.decode() for m in mailboxes if m])
+
+        status, select_data = imap.select('[Gmail]/All Mail', readonly=True)
         if status != "OK":
             raise FileNotFoundError(
                 "Could not select '[Gmail]/All Mail'. "
                 "Ensure IMAP is enabled in Gmail settings."
             )
+        logger.info("All Mail message count: %s", select_data[0].decode() if select_data else "unknown")
 
         # Search for messages with the subject pattern
         search_criterion = f'SUBJECT "{subject_pattern}"'
+        logger.info("Searching with criterion: %s", search_criterion)
         status, data = imap.search(None, search_criterion)
         if status != "OK" or not data or not data[0]:
             raise FileNotFoundError(
