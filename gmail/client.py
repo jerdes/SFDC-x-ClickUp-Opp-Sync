@@ -50,7 +50,12 @@ def fetch_latest_csv_attachment(
         imap.login(address, app_password)
         logger.debug("IMAP login successful.")
 
-        imap.select('"[Gmail]/All Mail"', readonly=True)
+        status, _ = imap.select('[Gmail]/All Mail', readonly=True)
+        if status != "OK":
+            raise FileNotFoundError(
+                "Could not select '[Gmail]/All Mail'. "
+                "Ensure IMAP is enabled in Gmail settings."
+            )
 
         # Search for messages with the subject pattern
         search_criterion = f'SUBJECT "{subject_pattern}"'
