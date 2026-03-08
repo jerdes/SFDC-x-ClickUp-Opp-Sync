@@ -20,16 +20,13 @@ class Opportunity:
     name: str
 
     # All other synced fields (may be empty string if not present in CSV)
-    owner: str = ""
     account_name: str = ""
     stage: str = ""
-    arr: str = ""
     sales_estimated_quota_relief: str = ""
     close_date: str = ""
     next_step_date: str = ""
     next_step: str = ""
     forecast_category: str = ""
-    type: str = ""
     metrics: str = ""
     economic_buyer: str = ""
     decision_criteria: str = ""
@@ -39,18 +36,14 @@ class Opportunity:
     champion_name: str = ""
     competitor: str = ""
     other_competitor: str = ""
-    cuo_meeting: str = ""
-    completed: str = ""
+    cuo_meeting_completed: str = ""
     evaluation_agreed: str = ""
     pricing_discussed: str = ""
     decision_criteria_met: str = ""
     economic_buyer_approved: str = ""
-    department: str = ""
     ironclad_signatory: str = ""
     map_url: str = ""
     three_whys: str = ""
-    plan: str = ""
-    number_of_plan_seats: str = ""
     created_date: str = ""
 
     # Full original row — forward-compatible; preserves any extra columns
@@ -115,16 +108,13 @@ def parse_csv(csv_bytes: bytes, field_map: dict[str, str]) -> list[Opportunity]:
         opp = Opportunity(
             sf_opportunity_id=sf_id,
             name=name,
-            owner=canonical_row.get("owner", ""),
             account_name=canonical_row.get("account_name", ""),
             stage=canonical_row.get("stage", ""),
-            arr=canonical_row.get("arr", ""),
             sales_estimated_quota_relief=canonical_row.get("sales_estimated_quota_relief", ""),
             close_date=canonical_row.get("close_date", ""),
             next_step_date=canonical_row.get("next_step_date", ""),
             next_step=canonical_row.get("next_step", ""),
             forecast_category=canonical_row.get("forecast_category", ""),
-            type=canonical_row.get("type", ""),
             metrics=canonical_row.get("metrics", ""),
             economic_buyer=canonical_row.get("economic_buyer", ""),
             decision_criteria=canonical_row.get("decision_criteria", ""),
@@ -134,18 +124,14 @@ def parse_csv(csv_bytes: bytes, field_map: dict[str, str]) -> list[Opportunity]:
             champion_name=canonical_row.get("champion_name", ""),
             competitor=canonical_row.get("competitor", ""),
             other_competitor=canonical_row.get("other_competitor", ""),
-            cuo_meeting=canonical_row.get("cuo_meeting", ""),
-            completed=canonical_row.get("completed", ""),
+            cuo_meeting_completed=canonical_row.get("cuo_meeting_completed", ""),
             evaluation_agreed=canonical_row.get("evaluation_agreed", ""),
             pricing_discussed=canonical_row.get("pricing_discussed", ""),
             decision_criteria_met=canonical_row.get("decision_criteria_met", ""),
             economic_buyer_approved=canonical_row.get("economic_buyer_approved", ""),
-            department=canonical_row.get("department", ""),
             ironclad_signatory=canonical_row.get("ironclad_signatory", ""),
             map_url=canonical_row.get("map_url", ""),
             three_whys=canonical_row.get("three_whys", ""),
-            plan=canonical_row.get("plan", ""),
-            number_of_plan_seats=canonical_row.get("number_of_plan_seats", ""),
             created_date=canonical_row.get("created_date", ""),
             raw=dict(row),
         )

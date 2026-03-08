@@ -65,7 +65,7 @@ def _to_number(value_str: str) -> float | None:
 _DATE_FIELDS = {"close_date", "next_step_date", "created_date"}
 
 # Canonical names that map to ClickUp currency or number fields (require numeric values)
-_NUMBER_FIELDS = {"arr", "sales_estimated_quota_relief", "number_of_plan_seats"}
+_NUMBER_FIELDS = {"sales_estimated_quota_relief"}
 
 
 def build_custom_fields_payload(
@@ -86,8 +86,7 @@ def build_custom_fields_payload(
     """
     # Fields that carry boolean/checkbox semantics in the CSV
     _CHECKBOX_FIELDS = {
-        "cuo_meeting",
-        "completed",
+        "cuo_meeting_completed",
         "evaluation_agreed",
         "pricing_discussed",
         "decision_criteria_met",
@@ -99,16 +98,13 @@ def build_custom_fields_payload(
     # Map canonical name -> value from the Opportunity dataclass
     field_values: dict[str, str] = {
         "sf_opportunity_id":            opportunity.sf_opportunity_id,
-        "owner":                        opportunity.owner,
         "account_name":                 opportunity.account_name,
         "stage":                        opportunity.stage,
-        "arr":                          opportunity.arr,
         "sales_estimated_quota_relief": opportunity.sales_estimated_quota_relief,
         "close_date":                   opportunity.close_date,
         "next_step_date":               opportunity.next_step_date,
         "next_step":                    opportunity.next_step,
         "forecast_category":            opportunity.forecast_category,
-        "type":                         opportunity.type,
         "metrics":                      opportunity.metrics,
         "economic_buyer":               opportunity.economic_buyer,
         "decision_criteria":            opportunity.decision_criteria,
@@ -118,18 +114,14 @@ def build_custom_fields_payload(
         "champion_name":                opportunity.champion_name,
         "competitor":                   opportunity.competitor,
         "other_competitor":             opportunity.other_competitor,
-        "cuo_meeting":                  opportunity.cuo_meeting,
-        "completed":                    opportunity.completed,
+        "cuo_meeting_completed":        opportunity.cuo_meeting_completed,
         "evaluation_agreed":            opportunity.evaluation_agreed,
         "pricing_discussed":            opportunity.pricing_discussed,
         "decision_criteria_met":        opportunity.decision_criteria_met,
         "economic_buyer_approved":      opportunity.economic_buyer_approved,
-        "department":                   opportunity.department,
         "ironclad_signatory":           opportunity.ironclad_signatory,
         "map_url":                      opportunity.map_url,
         "three_whys":                   opportunity.three_whys,
-        "plan":                         opportunity.plan,
-        "number_of_plan_seats":         opportunity.number_of_plan_seats,
         "created_date":                 opportunity.created_date,
     }
 
