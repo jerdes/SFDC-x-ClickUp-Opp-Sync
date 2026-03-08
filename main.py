@@ -4,6 +4,9 @@ main.py — Entry point for the Salesforce → ClickUp opportunity sync.
 
 Intended to be called by a system cron job:
     0 7 * * * /usr/bin/python3 /home/user/SFDC-x-ClickUp-Opp-Sync/main.py >> /home/user/SFDC-x-ClickUp-Opp-Sync/logs/cron.log 2>&1
+
+Pass --list-fields to print all custom fields on the configured ClickUp list
+and exit (useful for initial setup to find the correct field UUIDs).
 """
 from __future__ import annotations
 
@@ -14,7 +17,31 @@ from config.settings import load_settings
 from utils.logger import setup_logging
 
 
+def list_fields_mode(settings) -> int:
+    """Print all custom fields on the configured ClickUp list and exit."""
+    from clickup.client import ClickUpClient
+
+    client = ClickUpClient(settings.clickup_api_token, settings.clickup_list_id)
+    fields = client.get_list_fields()
+
+    if not fields:
+        print(f"No custom fields found on list {settings.clickup_list_id}.")
+        return 0
+
+    print(f"\nCustom fields on ClickUp list {settings.clickup_list_id}:\n")
+    print(f"{'NAME':<45} {'TYPE':<20} {'ID'}")
+    print("-" * 100)
+    for f in sorted(fields, key=lambda x: x.get("name", "")):
+        print(f"{f.get('name', ''):<45} {f.get('type', ''):<20} {f.get('id', '')}")
+
+    print(f"\nTotal: {len(fields)} field(s)")
+    print("\nCopy the IDs above into your GitHub secrets as CLICKUP_FIELD_ID_<CANONICAL_NAME>")
+    return 0
+
+
 def main() -> int:
+    list_fields = "--list-fields" in sys.argv
+
     # 1. Load settings (raises ValueError on missing required config)
     try:
         settings = load_settings()
@@ -22,6 +49,10 @@ def main() -> int:
         # Logging isn't set up yet — print to stderr so cron captures it
         print(f"[FATAL] Configuration error: {exc}", file=sys.stderr)
         return 1
+
+    # --list-fields: print fields and exit (no Gmail/CSV needed)
+    if list_fields:
+        return list_fields_mode(settings)
 
     # 2. Set up logging
     setup_logging(settings.log_file, settings.log_level)
