@@ -118,7 +118,7 @@ def load_settings() -> Settings:
     csv_field_map: dict[str, str] = {}
     for canonical, default_header in _CSV_HEADER_DEFAULTS.items():
         env_key = f"CSV_MAP_{canonical.upper()}"
-        csv_field_map[canonical] = os.getenv(env_key, default_header)
+        csv_field_map[canonical] = os.getenv(env_key) or default_header
 
     # Build clickup_field_ids: canonical_name -> ClickUp field UUID
     # These must all be present (except 'name' which is the task title)
