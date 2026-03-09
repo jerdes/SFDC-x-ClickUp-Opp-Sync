@@ -148,7 +148,10 @@ def build_custom_fields_payload(
             continue  # field not configured — skip silently
 
         if canonical in _CHECKBOX_FIELDS:
-            bool_val = value.strip().lower() in ("true", "yes", "1", "checked", "✓")
+            if not value.strip():
+                continue  # no CSV value — leave the checkbox as-is in ClickUp
+            # CSV exports '1' for checked, '0' for unchecked
+            bool_val = value.strip() in ("1", "true", "yes", "checked", "✓")
             payload.append({"id": field_id, "value": bool_val})
 
         elif canonical in _DATE_FIELDS:
