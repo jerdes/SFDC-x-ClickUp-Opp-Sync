@@ -66,6 +66,7 @@ def main() -> int:
             token[:4] if len(token) > 4 else "???",
         )
         clickup_client = ClickUpClient(token, settings.clickup_list_id)
+        clickup_client.validate_token()
 
         sf_id_field_id = settings.clickup_field_ids.get("sf_opportunity_id", "")
 
