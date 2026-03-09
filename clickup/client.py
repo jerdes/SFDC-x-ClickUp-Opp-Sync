@@ -39,6 +39,32 @@ class ClickUpClient:
     # Public API
     # ------------------------------------------------------------------
 
+    def validate_token(self) -> dict:
+        """
+        Call GET /user to verify the API token is valid.
+        Returns the user dict on success.
+        Raises ClickUpAPIError on failure with a helpful message.
+        """
+        try:
+            data = self._get("/user")
+            user = data.get("user", {})
+            logger.info(
+                "ClickUp token validated: user='%s' (id=%s)",
+                user.get("username", "?"),
+                user.get("id", "?"),
+            )
+            return user
+        except ClickUpAPIError as exc:
+            if exc.status_code == 401:
+                raise ClickUpAPIError(
+                    401,
+                    "Token rejected by ClickUp. Verify your CLICKUP_API_TOKEN: "
+                    "go to ClickUp → Settings → Apps → API Token, regenerate, "
+                    "and update the GitHub secret. "
+                    f"Original error: {exc.body}",
+                ) from exc
+            raise
+
     def get_list_fields(self) -> list[dict]:
         """
         Fetch all custom fields defined on this ClickUp list.
@@ -137,7 +163,8 @@ class ClickUpClient:
         return self._request("PUT", path, json=body)
 
     def _request(self, method: str, path: str, **kwargs) -> dict:
-        base_url = os.getenv("CLICKUP_BASE_URL", _DEFAULT_BASE_URL).rstrip("/")
+        base_url = (os.getenv("CLICKUP_BASE_URL") or _DEFAULT_BASE_URL).rstrip("/")
+        logger.debug("ClickUp request: %s %s%s", method, base_url, path)
         url = base_url + path
         last_exc: Exception | None = None
 

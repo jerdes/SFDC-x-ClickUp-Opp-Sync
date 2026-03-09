@@ -59,7 +59,18 @@ def main() -> int:
         from clickup.client import ClickUpClient
         from sync.engine import run_sync
 
-        clickup_client = ClickUpClient(settings.clickup_api_token, settings.clickup_list_id)
+        token = settings.clickup_api_token
+        logger.info(
+            "ClickUp token: length=%d, prefix='%s…'",
+            len(token),
+            token[:4] if len(token) > 4 else "???",
+        )
+        import os
+        base_url = (os.getenv("CLICKUP_BASE_URL") or "https://api.clickup.com/api/v2").rstrip("/")
+        logger.info("ClickUp base URL: %s", base_url)
+
+        clickup_client = ClickUpClient(token, settings.clickup_list_id)
+        clickup_client.validate_token()
 
         sf_id_field_id = settings.clickup_field_ids.get("sf_opportunity_id", "")
 
