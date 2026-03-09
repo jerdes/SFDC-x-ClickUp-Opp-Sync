@@ -70,6 +70,11 @@ _NUMBER_FIELDS = {"sales_estimated_quota_relief"}
 # Canonical names that map to ClickUp url fields (value must start with http/https)
 _URL_FIELDS = {"map_url", "three_whys"}
 
+# Canonical names that are always dropdown/labels fields.
+# These must go through the orderindex lookup even if field_options is missing the ID
+# (which can happen when the API returns a different type string than expected).
+_DROPDOWN_FIELDS = {"stage", "forecast_category"}
+
 
 def _is_valid_url(value: str) -> bool:
     return value.startswith("http://") or value.startswith("https://")
@@ -168,20 +173,28 @@ def build_custom_fields_payload(
                         value, canonical,
                     )
 
-        elif field_options and field_id in field_options:
+        elif (field_options and field_id in field_options) or canonical in _DROPDOWN_FIELDS:
             # Dropdown field — ClickUp requires the option's integer orderindex,
             # not the option text.  Look up by lowercased name.
             if value:
-                options = field_options[field_id]
-                orderindex = options.get(value.strip().lower())
-                if orderindex is not None:
-                    payload.append({"id": field_id, "value": orderindex})
-                else:
+                options = (field_options or {}).get(field_id, {})
+                if not options:
                     logger.warning(
-                        "Dropdown option '%s' not found for field '%s' — skipping. "
-                        "Available options: %s",
-                        value, canonical, list(options.keys()),
+                        "Dropdown field '%s' (id=%s) has no options in field_options. "
+                        "The ClickUp field may not be type 'drop_down'/'labels', or "
+                        "field definitions could not be fetched. SF value '%s' will be skipped.",
+                        canonical, field_id, value,
                     )
+                else:
+                    orderindex = options.get(value.strip().lower())
+                    if orderindex is not None:
+                        payload.append({"id": field_id, "value": orderindex})
+                    else:
+                        logger.warning(
+                            "Dropdown option '%s' not found for field '%s' — skipping. "
+                            "Available options: %s",
+                            value, canonical, list(options.keys()),
+                        )
 
         else:
             # text / short_text — pass as-is
