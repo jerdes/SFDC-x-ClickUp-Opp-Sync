@@ -72,9 +72,19 @@ def match_opportunities(
             task_index[sf_id] = task
 
     logger.debug(
-        "Task index built: %d ClickUp tasks have a Salesforce Opportunity ID.",
+        "Task index built: %d of %d ClickUp tasks have a Salesforce Opportunity ID.",
         len(task_index),
+        len(clickup_tasks),
     )
+    if clickup_tasks and not task_index:
+        logger.warning(
+            "Fetched %d ClickUp tasks but NONE have the SF Opportunity ID field set "
+            "(field_id=%s). All CSV rows will be treated as new creates. "
+            "Check that CLICKUP_FIELD_ID_SF_OPPORTUNITY_ID is correct and that the "
+            "field value was stored on existing tasks.",
+            len(clickup_tasks),
+            sf_id_field_id,
+        )
 
     result = MatchResult()
     csv_sf_ids: set[str] = set()

@@ -104,6 +104,15 @@ class ClickUpClient:
         logger.debug("Updated task id=%s", task_id)
         return task
 
+    def set_custom_field(self, task_id: str, field_id: str, value) -> None:
+        """
+        Explicitly set one custom field value using the dedicated ClickUp endpoint.
+        More reliable than including custom_fields in the create/update body,
+        which ClickUp may silently ignore for certain field types.
+        """
+        self._post(f"/task/{task_id}/field/{field_id}", {"value": value})
+        logger.debug("Set field %s on task %s to %r", field_id, task_id, value)
+
     def close_orphan_task(self, task_id: str) -> dict:
         """
         Mark a ClickUp task as closed without touching its custom fields.

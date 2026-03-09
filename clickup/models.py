@@ -78,6 +78,7 @@ def _is_valid_url(value: str) -> bool:
 def build_custom_fields_payload(
     opportunity: "Opportunity",  # type: ignore[name-defined]  # forward ref
     field_ids: dict[str, str],
+    field_options: dict[str, dict[str, int]] | None = None,
 ) -> list[dict]:
     """
     Build the custom_fields array for a ClickUp create/update request body.
@@ -87,9 +88,13 @@ def build_custom_fields_payload(
     Args:
         opportunity: An Opportunity instance from sync/parser.py.
         field_ids: Maps canonical field name -> ClickUp custom field UUID.
+        field_options: Optional mapping of field_uuid -> {option_name_lower -> orderindex}
+            for drop_down fields.  When provided, text values are converted to
+            the integer orderindex ClickUp requires.  Fields whose text value
+            cannot be matched to an option are skipped with a warning.
 
     Returns:
-        List of {"id": "<uuid>", "value": "<value>"} dicts.
+        List of {"id": "<uuid>", "value": <value>} dicts.
     """
     # Fields that carry boolean/checkbox semantics in the CSV
     _CHECKBOX_FIELDS = {
@@ -163,6 +168,21 @@ def build_custom_fields_payload(
                         value, canonical,
                     )
 
+        elif field_options and field_id in field_options:
+            # Dropdown field — ClickUp requires the option's integer orderindex,
+            # not the option text.  Look up by lowercased name.
+            if value:
+                options = field_options[field_id]
+                orderindex = options.get(value.strip().lower())
+                if orderindex is not None:
+                    payload.append({"id": field_id, "value": orderindex})
+                else:
+                    logger.warning(
+                        "Dropdown option '%s' not found for field '%s' — skipping. "
+                        "Available options: %s",
+                        value, canonical, list(options.keys()),
+                    )
+
         else:
             # text / short_text — pass as-is
             if value:
@@ -204,6 +224,7 @@ def get_changed_fields_payload(
     opportunity: "Opportunity",  # type: ignore[name-defined]
     existing_task: dict,
     field_ids: dict[str, str],
+    field_options: dict[str, dict[str, int]] | None = None,
 ) -> list[dict]:
     """
     Return a custom_fields payload containing only fields whose target value
@@ -218,7 +239,7 @@ def get_changed_fields_payload(
         Subset of build_custom_fields_payload(opportunity, field_ids) containing
         only entries where the value has changed.
     """
-    target_payload = build_custom_fields_payload(opportunity, field_ids)
+    target_payload = build_custom_fields_payload(opportunity, field_ids, field_options)
 
     # Index current ClickUp field values by field UUID
     current_by_id: dict[str, object] = {
