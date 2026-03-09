@@ -75,27 +75,32 @@ class ClickUpClient:
 
     def get_all_tasks(self, sf_id_field_id: str = "") -> list[dict]:
         """
-        Fetch every task in the list (including closed/archived) via pagination.
+        Fetch every task in the list (including closed and archived) via pagination.
         Returns a flat list of task dicts.
         """
         tasks: list[dict] = []
-        page = 0
 
-        while True:
-            params = {
-                "page": page,
-                "include_closed": "true",
-                "archived": "true",
-                "subtasks": "false",
-            }
-            data = self._get(f"/list/{self._list_id}/task", params=params)
-            batch = data.get("tasks", [])
-            tasks.extend(batch)
-            logger.debug("Fetched page %d: %d tasks", page, len(batch))
+        # ClickUp v2: archived=true returns ONLY archived tasks; archived=false (default)
+        # returns non-archived tasks. Fetch both passes and merge so no task is missed.
+        for archived in ("false", "true"):
+            page = 0
+            while True:
+                params = {
+                    "page": page,
+                    "include_closed": "true",
+                    "archived": archived,
+                    "subtasks": "false",
+                }
+                data = self._get(f"/list/{self._list_id}/task", params=params)
+                batch = data.get("tasks", [])
+                tasks.extend(batch)
+                logger.debug(
+                    "Fetched page %d (archived=%s): %d tasks", page, archived, len(batch)
+                )
 
-            if not batch:
-                break
-            page += 1
+                if not batch:
+                    break
+                page += 1
 
         tasks = self._hydrate_tasks_for_matching(tasks, sf_id_field_id)
 
