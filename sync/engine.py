@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass, field
 
 from clickup.client import ClickUpClient, ClickUpAPIError
-from clickup.models import build_custom_fields_payload, get_changed_fields_payload
+from clickup.models import build_custom_fields_payload, get_changed_fields_payload, _DROPDOWN_FIELDS
 from sync.matcher import match_opportunities
 from sync.parser import Opportunity
 
@@ -26,18 +26,22 @@ class SyncSummary:
 _DROPDOWN_TYPES = {"drop_down", "labels"}
 
 
-def _build_field_options(list_fields: list[dict]) -> dict[str, dict[str, int]]:
+def _build_field_options(list_fields: list[dict]) -> tuple[dict[str, dict[str, int]], dict[str, str]]:
     """
-    Build a lookup of drop_down/labels option names -> orderindex, keyed by field UUID.
+    Build a lookup of drop_down/labels option names -> orderindex, keyed by field UUID,
+    and a reverse lookup of field UUID -> display name for diagnostics.
 
     ClickUp dropdown-style fields require the integer orderindex of the chosen option,
     not the display text.  This lookup is built once per sync run from the list's
     field definitions and threaded through all payload-building calls.
 
     Returns:
-        {field_uuid: {option_name_lower: orderindex, ...}, ...}
+        Tuple of:
+          - {field_uuid: {option_name_lower: orderindex, ...}, ...}
+          - {field_uuid: field_display_name, ...}  (dropdown fields only)
     """
     result: dict[str, dict[str, int]] = {}
+    id_to_name: dict[str, str] = {}
     for f in list_fields:
         field_type = f.get("type", "")
         logger.debug("List field '%s' (id=%s) has type='%s'", f.get("name"), f.get("id"), field_type)
@@ -52,13 +56,40 @@ def _build_field_options(list_fields: list[dict]) -> dict[str, dict[str, int]]:
                         option_map[name.lower()] = int(orderindex)
                     except (ValueError, TypeError):
                         pass
-            result[f["id"]] = option_map
+            fid = f["id"]
+            fname = f.get("name", fid)
+            result[fid] = option_map
+            id_to_name[fid] = fname
             logger.info(
                 "Dropdown field '%s' (id=%s, type=%s): %d option(s) indexed: %s",
-                f.get("name"), f.get("id"), field_type, len(option_map), list(option_map.keys()),
+                fname, fid, field_type, len(option_map), list(option_map.keys()),
             )
     logger.debug("Built dropdown option map for %d field(s).", len(result))
-    return result
+    return result, id_to_name
+
+
+def _warn_misconfigured_dropdowns(
+    field_ids: dict[str, str],
+    field_options: dict[str, dict[str, int]],
+    id_to_name: dict[str, str],
+) -> None:
+    """
+    Log a one-time warning for each configured dropdown field whose ID is not found
+    in the list's field definitions.  Includes available dropdown IDs to help diagnose
+    misconfigured env vars.
+    """
+    available = ", ".join(
+        f"'{name}' (id={fid})" for fid, name in sorted(id_to_name.items(), key=lambda kv: kv[1])
+    )
+    for canonical in _DROPDOWN_FIELDS:
+        fid = field_ids.get(canonical)
+        if fid and fid not in field_options:
+            logger.warning(
+                "Configured field '%s' (id=%s) was NOT found in the list's dropdown fields. "
+                "Stage and forecast_category updates will be skipped until this is corrected. "
+                "Available dropdown fields: [%s]",
+                canonical, fid, available,
+            )
 
 
 def run_sync(
@@ -86,7 +117,8 @@ def run_sync(
     # orderindex ClickUp requires for drop_down custom fields.
     logger.info("Fetching list field definitions...")
     list_fields = clickup_client.get_list_fields()
-    field_options = _build_field_options(list_fields)
+    field_options, id_to_name = _build_field_options(list_fields)
+    _warn_misconfigured_dropdowns(field_ids, field_options, id_to_name)
 
     closed_status = "DONE"
 

@@ -182,10 +182,9 @@ def build_custom_fields_payload(
             if value:
                 options = (field_options or {}).get(field_id, {})
                 if not options:
-                    logger.warning(
-                        "Dropdown field '%s' (id=%s) has no options in field_options. "
-                        "The ClickUp field may not be type 'drop_down'/'labels', or "
-                        "field definitions could not be fetched. SF value '%s' will be skipped.",
+                    logger.debug(
+                        "Dropdown field '%s' (id=%s) has no options — field ID not found "
+                        "in list definitions. SF value '%s' will be skipped.",
                         canonical, field_id, value,
                     )
                 else:
