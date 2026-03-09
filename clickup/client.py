@@ -70,8 +70,17 @@ class ClickUpClient:
                 break
             page += 1
 
+        tasks = self._hydrate_missing_custom_fields(tasks)
+
         logger.info("Fetched %d total tasks from ClickUp list %s", len(tasks), self._list_id)
         return tasks
+
+    def get_task(self, task_id: str) -> dict:
+        """
+        Fetch a single task by ID. Used to hydrate list results when custom fields
+        are missing from list-task responses.
+        """
+        return self._get(f"/task/{task_id}")
 
     def create_task(self, name: str, custom_fields: list[dict]) -> dict:
         """
@@ -142,3 +151,41 @@ class ClickUpClient:
             return resp.json()
 
         raise last_exc or ClickUpAPIError(429, "Rate limit exceeded after retries")
+
+    def _hydrate_missing_custom_fields(self, tasks: list[dict]) -> list[dict]:
+        """
+        Some ClickUp list-task responses can omit the `custom_fields` key/value.
+        Matching relies on the Salesforce ID custom field, so hydrate tasks via
+        GET /task/{id} when needed.
+        """
+        missing = [t for t in tasks if not isinstance(t.get("custom_fields"), list)]
+        if not missing:
+            return tasks
+
+        logger.warning(
+            "%d task(s) missing custom_fields in list response. Hydrating task details...",
+            len(missing),
+        )
+
+        hydrated_by_id: dict[str, dict] = {}
+        for task in missing:
+            task_id = task.get("id")
+            if not task_id:
+                continue
+            try:
+                hydrated_by_id[task_id] = self.get_task(task_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Could not hydrate task id=%s for custom fields; using list payload. Error: %s",
+                    task_id,
+                    exc,
+                )
+
+        if not hydrated_by_id:
+            return tasks
+
+        merged: list[dict] = []
+        for task in tasks:
+            task_id = task.get("id")
+            merged.append(hydrated_by_id.get(task_id, task))
+        return merged
