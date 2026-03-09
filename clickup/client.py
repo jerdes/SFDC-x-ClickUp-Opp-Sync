@@ -73,6 +73,14 @@ class ClickUpClient:
         data = self._get(f"/list/{self._list_id}/field")
         return data.get("fields", [])
 
+    def get_list_statuses(self) -> list[dict]:
+        """
+        Fetch the list object and return its statuses array.
+        Each status has 'status' (name), 'type' ('open'/'closed'/'custom'), 'color'.
+        """
+        data = self._get(f"/list/{self._list_id}")
+        return data.get("statuses", [])
+
     def get_all_tasks(self, sf_id_field_id: str = "") -> list[dict]:
         """
         Fetch every task in the list (including closed and archived) via pagination.
@@ -144,14 +152,15 @@ class ClickUpClient:
         self._post(f"/task/{task_id}/field/{field_id}", {"value": value})
         logger.debug("Set field %s on task %s to %r", field_id, task_id, value)
 
-    def close_orphan_task(self, task_id: str) -> dict:
+    def close_orphan_task(self, task_id: str, closed_status: str = "closed") -> dict:
         """
         Mark a ClickUp task as closed without touching its custom fields.
         Used when a task's SF Opportunity ID no longer appears in the CSV.
+        closed_status must match the exact status name on this list.
         Returns the updated task dict.
         """
-        task = self._put(f"/task/{task_id}", {"status": "closed"})
-        logger.debug("Closed orphan task id=%s", task_id)
+        task = self._put(f"/task/{task_id}", {"status": closed_status})
+        logger.debug("Closed orphan task id=%s (status=%r)", task_id, closed_status)
         return task
 
     # ------------------------------------------------------------------

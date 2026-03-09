@@ -74,6 +74,26 @@ def run_sync(
     list_fields = clickup_client.get_list_fields()
     field_options = _build_field_options(list_fields)
 
+    # Discover the correct "closed" status name for this list.
+    # ClickUp statuses have a 'type' field; the one with type=='closed' is the
+    # canonical done-state regardless of what it's named (e.g. "Complete", "Done").
+    closed_status = "closed"
+    try:
+        statuses = clickup_client.get_list_statuses()
+        for s in statuses:
+            if s.get("type") == "closed":
+                closed_status = s["status"]
+                logger.info("Closed status for this list: %r", closed_status)
+                break
+        else:
+            logger.warning(
+                "No status with type='closed' found on list; defaulting to %r. "
+                "Orphan tasks may not be closeable.",
+                closed_status,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not fetch list statuses; defaulting to %r. Error: %s", closed_status, exc)
+
     logger.info("Fetching all ClickUp tasks...")
     all_tasks = clickup_client.get_all_tasks(sf_id_field_id)
 
@@ -141,7 +161,7 @@ def run_sync(
         task_id = task["id"]
         task_name = task.get("name", task_id)
         try:
-            clickup_client.close_orphan_task(task_id)
+            clickup_client.close_orphan_task(task_id, closed_status)
             summary.closed += 1
             logger.info("CLOSED   '%s' (CU id=%s) — SF ID not in CSV", task_name, task_id)
         except ClickUpAPIError as exc:
