@@ -1,11 +1,11 @@
 name: Salesforce → ClickUp Sync
 
 on:
-  # Runs weekdays at 9:50 AM Sydney time (AEDT UTC+11 / AEST UTC+10).
-  # 10:50 PM UTC Sun–Thu = 9:50 AM Mon–Fri AEDT (DST); 10:50 AM AEST (winter).
+  # Runs weekdays at 9:03 AM Sydney time (AEDT UTC+11 / AEST UTC+10).
+  # 10:03 PM UTC Sun–Thu = 9:03 AM Mon–Fri AEDT (DST); 11:03 AM AEST (winter).
   # Use https://crontab.guru to adjust if needed.
   schedule:
-    - cron: "50 22 * * 0-4"
+    - cron: "3 22 * * 0-4"
 
   # Lets you trigger a manual run from the Actions tab at any time
   workflow_dispatch:
