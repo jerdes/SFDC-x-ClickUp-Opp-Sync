@@ -75,27 +75,32 @@ class ClickUpClient:
 
     def get_all_tasks(self, sf_id_field_id: str = "") -> list[dict]:
         """
-        Fetch every task in the list (including closed/archived) via pagination.
+        Fetch every task in the list (including closed and archived) via pagination.
         Returns a flat list of task dicts.
         """
         tasks: list[dict] = []
-        page = 0
 
-        while True:
-            params = {
-                "page": page,
-                "include_closed": "true",
-                "archived": "true",
-                "subtasks": "false",
-            }
-            data = self._get(f"/list/{self._list_id}/task", params=params)
-            batch = data.get("tasks", [])
-            tasks.extend(batch)
-            logger.debug("Fetched page %d: %d tasks", page, len(batch))
+        # ClickUp v2: archived=true returns ONLY archived tasks; archived=false (default)
+        # returns non-archived tasks. Fetch both passes and merge so no task is missed.
+        for archived in ("false", "true"):
+            page = 0
+            while True:
+                params = {
+                    "page": page,
+                    "include_closed": "true",
+                    "archived": archived,
+                    "subtasks": "false",
+                }
+                data = self._get(f"/list/{self._list_id}/task", params=params)
+                batch = data.get("tasks", [])
+                tasks.extend(batch)
+                logger.debug(
+                    "Fetched page %d (archived=%s): %d tasks", page, archived, len(batch)
+                )
 
-            if not batch:
-                break
-            page += 1
+                if not batch:
+                    break
+                page += 1
 
         tasks = self._hydrate_tasks_for_matching(tasks, sf_id_field_id)
 
@@ -119,16 +124,19 @@ class ClickUpClient:
         logger.debug("Created task id=%s name='%s'", task.get("id"), name)
         return task
 
-    def update_task(self, task_id: str, name: str, custom_fields: list[dict]) -> dict:
+    def update_task(self, task_id: str, name: str, custom_fields: list[dict]) -> None:
         """
-        Update a ClickUp task's name and/or a subset of its custom fields.
-        Pass only the fields that have changed; unchanged fields are omitted.
-        Returns the updated task dict.
+        Update a ClickUp task's name and each changed custom field.
+
+        The task name is updated via PUT /task/{id}.  Each custom field is set
+        via the dedicated POST /task/{id}/field/{field_id} endpoint, which is
+        the only reliable way to set dropdown (and other typed) fields — the
+        PUT body's custom_fields array silently ignores option UUIDs for dropdowns.
         """
-        body: dict = {"name": name, "custom_fields": custom_fields}
-        task = self._put(f"/task/{task_id}", body)
-        logger.debug("Updated task id=%s", task_id)
-        return task
+        self._put(f"/task/{task_id}", {"name": name})
+        for field in custom_fields:
+            self.set_custom_field(task_id, field["id"], field["value"])
+        logger.debug("Updated task id=%s (%d field(s))", task_id, len(custom_fields))
 
     def set_custom_field(self, task_id: str, field_id: str, value) -> None:
         """
