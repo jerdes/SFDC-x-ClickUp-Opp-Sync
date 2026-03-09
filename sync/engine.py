@@ -23,6 +23,30 @@ class SyncSummary:
     errors: list[str] = field(default_factory=list)
 
 
+def _build_field_options(list_fields: list[dict]) -> dict[str, dict[str, int]]:
+    """
+    Build a lookup of drop_down option names -> orderindex, keyed by field UUID.
+
+    ClickUp drop_down fields require the integer orderindex of the chosen option,
+    not the display text.  This lookup is built once per sync run from the list's
+    field definitions and threaded through all payload-building calls.
+
+    Returns:
+        {field_uuid: {option_name_lower: orderindex, ...}, ...}
+    """
+    result: dict[str, dict[str, int]] = {}
+    for f in list_fields:
+        if f.get("type") == "drop_down":
+            options = f.get("type_config", {}).get("options", [])
+            result[f["id"]] = {
+                opt["name"].lower(): opt["orderindex"]
+                for opt in options
+                if opt.get("name") is not None and opt.get("orderindex") is not None
+            }
+    logger.debug("Built dropdown option map for %d field(s).", len(result))
+    return result
+
+
 def run_sync(
     opportunities: list[Opportunity],
     clickup_client: ClickUpClient,
@@ -43,16 +67,32 @@ def run_sync(
     """
     summary = SyncSummary()
 
+    # Fetch field definitions once to build the dropdown option lookup.
+    # This lets us convert text values (e.g. "Prospecting") to the integer
+    # orderindex ClickUp requires for drop_down custom fields.
+    logger.info("Fetching list field definitions...")
+    list_fields = clickup_client.get_list_fields()
+    field_options = _build_field_options(list_fields)
+
     logger.info("Fetching all ClickUp tasks...")
-    all_tasks = clickup_client.get_all_tasks()
+    all_tasks = clickup_client.get_all_tasks(sf_id_field_id)
 
     match = match_opportunities(opportunities, all_tasks, sf_id_field_id)
 
     # --- Create ---
     for opp in match.to_create:
         try:
-            custom_fields = build_custom_fields_payload(opp, field_ids)
-            clickup_client.create_task(opp.name, custom_fields)
+            custom_fields = build_custom_fields_payload(opp, field_ids, field_options)
+            task = clickup_client.create_task(opp.name, custom_fields)
+
+            # Explicitly set the SF Opportunity ID via the dedicated field endpoint.
+            # The custom_fields array in the create body is not always persisted by
+            # ClickUp, which would break matching on future runs.
+            if sf_id_field_id:
+                clickup_client.set_custom_field(
+                    task["id"], sf_id_field_id, opp.sf_opportunity_id
+                )
+
             summary.created += 1
             logger.info("CREATED  '%s' (SF id=%s)", opp.name, opp.sf_opportunity_id)
         except ClickUpAPIError as exc:
@@ -68,7 +108,7 @@ def run_sync(
     for opp, task in match.to_update:
         task_id = task["id"]
         try:
-            changed_fields = get_changed_fields_payload(opp, task, field_ids)
+            changed_fields = get_changed_fields_payload(opp, task, field_ids, field_options)
             name_changed = opp.name != task.get("name", "")
 
             if not changed_fields and not name_changed:
