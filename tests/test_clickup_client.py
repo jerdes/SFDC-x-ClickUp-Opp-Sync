@@ -53,41 +53,6 @@ class TestClickUpClientHydration(unittest.TestCase):
         self.assertEqual(len(tasks), 1)
         self.assertEqual(calls.count("/task/1"), 0)
 
-    def test_hydrates_when_sf_field_missing_in_list_payload(self):
-        client = ClickUpClient("token", "list")
-
-        calls = []
-
-        def fake_get(path, params=None):
-            calls.append(path)
-            if path == "/list/list/task":
-                if params.get("page") == 0:
-                    return {
-                        "tasks": [
-                            {
-                                "id": "1",
-                                "name": "A",
-                                "custom_fields": [{"id": "other", "value": "x"}],
-                            }
-                        ]
-                    }
-                return {"tasks": []}
-            if path == "/task/1":
-                return {
-                    "id": "1",
-                    "name": "A",
-                    "custom_fields": [{"id": "sf", "value": "OPP-1"}],
-                }
-            raise AssertionError(f"Unexpected path: {path}")
-
-        client._get = fake_get  # type: ignore[assignment]
-
-        tasks = client.get_all_tasks(sf_id_field_id="sf")
-
-        self.assertEqual(len(tasks), 1)
-        self.assertEqual(tasks[0]["custom_fields"][0]["id"], "sf")
-        self.assertEqual(calls.count("/task/1"), 1)
-
 
 if __name__ == "__main__":
     unittest.main()

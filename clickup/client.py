@@ -70,7 +70,7 @@ class ClickUpClient:
                 break
             page += 1
 
-        tasks = self._hydrate_tasks_for_matching(tasks, sf_id_field_id)
+        tasks = self._hydrate_missing_custom_fields(tasks)
 
         logger.info("Fetched %d total tasks from ClickUp list %s", len(tasks), self._list_id)
         return tasks
@@ -152,43 +152,23 @@ class ClickUpClient:
 
         raise last_exc or ClickUpAPIError(429, "Rate limit exceeded after retries")
 
-    def _task_has_field_value(self, task: dict, field_id: str) -> bool:
-        """Return True when task has a non-empty value for the given custom field id."""
-        if not field_id:
-            return False
-        for cf in task.get("custom_fields", []):
-            if cf.get("id") == field_id:
-                value = cf.get("value")
-                return value is not None and str(value).strip() != ""
-        return False
-
-    def _hydrate_tasks_for_matching(self, tasks: list[dict], sf_id_field_id: str = "") -> list[dict]:
+    def _hydrate_missing_custom_fields(self, tasks: list[dict]) -> list[dict]:
         """
         Some ClickUp list-task responses can omit the `custom_fields` key/value.
-        Some responses also omit the Salesforce ID custom field even when
-        `custom_fields` exists. Matching relies on that field, so hydrate task
-        details via GET /task/{id} when needed.
+        Matching relies on the Salesforce ID custom field, so hydrate tasks via
+        GET /task/{id} when needed.
         """
-        needs_hydration: list[dict] = []
-        for task in tasks:
-            custom_fields = task.get("custom_fields")
-            if not isinstance(custom_fields, list):
-                needs_hydration.append(task)
-                continue
-
-            if sf_id_field_id and not self._task_has_field_value(task, sf_id_field_id):
-                needs_hydration.append(task)
-
-        if not needs_hydration:
+        missing = [t for t in tasks if not isinstance(t.get("custom_fields"), list)]
+        if not missing:
             return tasks
 
         logger.warning(
-            "%d task(s) missing matching data in list response. Hydrating task details...",
-            len(needs_hydration),
+            "%d task(s) missing custom_fields in list response. Hydrating task details...",
+            len(missing),
         )
 
         hydrated_by_id: dict[str, dict] = {}
-        for task in needs_hydration:
+        for task in missing:
             task_id = task.get("id")
             if not task_id:
                 continue
