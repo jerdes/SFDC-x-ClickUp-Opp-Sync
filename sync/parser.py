@@ -73,8 +73,18 @@ def parse_csv(csv_bytes: bytes, field_map: dict[str, str]) -> list[Opportunity]:
 
     # Warn about any mapped columns not present in this CSV
     csv_headers = set(reader.fieldnames)
+    logger.debug("CSV headers found: %s", sorted(csv_headers))
+
     for canonical, csv_header in field_map.items():
         if csv_header not in csv_headers:
+            if canonical == "sf_opportunity_id":
+                raise ValueError(
+                    f"CRITICAL: The Opportunity ID column '{csv_header}' was not found in the CSV. "
+                    f"Every row will be skipped without it. "
+                    f"Either add this column to your Salesforce report, or set "
+                    f"CSV_MAP_SF_OPPORTUNITY_ID in .env/.github secrets to the exact column name. "
+                    f"Columns actually in this CSV: {sorted(csv_headers)}"
+                )
             logger.warning(
                 "Expected CSV column '%s' (mapped from '%s') not found in file. "
                 "It will be left blank. Check CSV_MAP_%s in .env.",
