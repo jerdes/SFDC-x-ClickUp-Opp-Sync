@@ -64,41 +64,41 @@ jobs:
       CLICKUP_FIELD_ID_CREATED_DATE:            ${{ secrets.CLICKUP_FIELD_ID_CREATED_DATE }}
 
       # ── CSV column mapping (only set secrets for these if your SF report ─
-      # ── uses different column headers than the defaults below)          ─
-      CSV_MAP_SF_OPPORTUNITY_ID:          ${{ secrets.CSV_MAP_SF_OPPORTUNITY_ID || 'Opportunity ID' }}
-      CSV_MAP_NAME:                       ${{ secrets.CSV_MAP_NAME || 'Opportunity Name' }}
-      CSV_MAP_OWNER:                      ${{ secrets.CSV_MAP_OWNER || 'Opportunity Owner' }}
-      CSV_MAP_ACCOUNT_NAME:               ${{ secrets.CSV_MAP_ACCOUNT_NAME || 'Account Name' }}
-      CSV_MAP_STAGE:                      ${{ secrets.CSV_MAP_STAGE || 'Stage' }}
-      CSV_MAP_ARR:                        ${{ secrets.CSV_MAP_ARR || 'Annual Recurring Revenue (ARR)' }}
-      CSV_MAP_SALES_ESTIMATED_QUOTA_RELIEF: ${{ secrets.CSV_MAP_SALES_ESTIMATED_QUOTA_RELIEF || 'Sales Estimated Quota Relief' }}
-      CSV_MAP_CLOSE_DATE:                 ${{ secrets.CSV_MAP_CLOSE_DATE || 'Close Date' }}
-      CSV_MAP_NEXT_STEP_DATE:             ${{ secrets.CSV_MAP_NEXT_STEP_DATE || 'Next Step Date' }}
-      CSV_MAP_NEXT_STEP:                  ${{ secrets.CSV_MAP_NEXT_STEP || 'Next Step' }}
-      CSV_MAP_FORECAST_CATEGORY:          ${{ secrets.CSV_MAP_FORECAST_CATEGORY || 'Forecast Category' }}
-      CSV_MAP_TYPE:                       ${{ secrets.CSV_MAP_TYPE || 'Type' }}
-      CSV_MAP_METRICS:                    ${{ secrets.CSV_MAP_METRICS || 'Metrics' }}
-      CSV_MAP_ECONOMIC_BUYER:             ${{ secrets.CSV_MAP_ECONOMIC_BUYER || 'Economic Buyer' }}
-      CSV_MAP_DECISION_CRITERIA:          ${{ secrets.CSV_MAP_DECISION_CRITERIA || 'Decision Criteria' }}
-      CSV_MAP_DECISION_PROCESS:           ${{ secrets.CSV_MAP_DECISION_PROCESS || 'Decision Process' }}
-      CSV_MAP_PAPER_PROCESS:              ${{ secrets.CSV_MAP_PAPER_PROCESS || 'Paper Process' }}
-      CSV_MAP_IMPLICATED_PAIN:            ${{ secrets.CSV_MAP_IMPLICATED_PAIN || 'Implicated Pain' }}
-      CSV_MAP_CHAMPION_NAME:              ${{ secrets.CSV_MAP_CHAMPION_NAME || 'Champion Name' }}
-      CSV_MAP_COMPETITOR:                 ${{ secrets.CSV_MAP_COMPETITOR || 'Competitor' }}
-      CSV_MAP_OTHER_COMPETITOR:           ${{ secrets.CSV_MAP_OTHER_COMPETITOR || 'Other Competitor' }}
-      CSV_MAP_CUO_MEETING:                ${{ secrets.CSV_MAP_CUO_MEETING || 'CUO Meeting Completed' }}
-      CSV_MAP_COMPLETED:                  ${{ secrets.CSV_MAP_COMPLETED || 'Completed' }}
-      CSV_MAP_EVALUATION_AGREED:          ${{ secrets.CSV_MAP_EVALUATION_AGREED || 'Evaluation Agreed' }}
-      CSV_MAP_PRICING_DISCUSSED:          ${{ secrets.CSV_MAP_PRICING_DISCUSSED || 'Pricing Discussed' }}
-      CSV_MAP_DECISION_CRITERIA_MET:      ${{ secrets.CSV_MAP_DECISION_CRITERIA_MET || 'Decision Criteria Met' }}
-      CSV_MAP_ECONOMIC_BUYER_APPROVED:    ${{ secrets.CSV_MAP_ECONOMIC_BUYER_APPROVED || 'Economic Buyer Approved' }}
-      CSV_MAP_DEPARTMENT:                 ${{ secrets.CSV_MAP_DEPARTMENT || 'Department' }}
-      CSV_MAP_IRONCLAD_SIGNATORY:         ${{ secrets.CSV_MAP_IRONCLAD_SIGNATORY || 'Ironclad Signatory' }}
-      CSV_MAP_MAP_URL:                    ${{ secrets.CSV_MAP_MAP_URL || 'Mutual Action Plan (MAP) URL' }}
-      CSV_MAP_THREE_WHYS:                 ${{ secrets.CSV_MAP_THREE_WHYS || '3 Whys Business Case' }}
-      CSV_MAP_PLAN:                       ${{ secrets.CSV_MAP_PLAN || 'Plan' }}
-      CSV_MAP_NUMBER_OF_PLAN_SEATS:       ${{ secrets.CSV_MAP_NUMBER_OF_PLAN_SEATS || 'Number of Plan Seats' }}
-      CSV_MAP_CREATED_DATE:               ${{ secrets.CSV_MAP_CREATED_DATE || 'Created Date' }}
+      # ── uses different column headers than the defaults in .env.example) ─
+      CSV_MAP_SF_OPPORTUNITY_ID:          ${{ secrets.CSV_MAP_SF_OPPORTUNITY_ID }}
+      CSV_MAP_NAME:                       ${{ secrets.CSV_MAP_NAME }}
+      CSV_MAP_OWNER:                      ${{ secrets.CSV_MAP_OWNER }}
+      CSV_MAP_ACCOUNT_NAME:               ${{ secrets.CSV_MAP_ACCOUNT_NAME }}
+      CSV_MAP_STAGE:                      ${{ secrets.CSV_MAP_STAGE }}
+      CSV_MAP_ARR:                        ${{ secrets.CSV_MAP_ARR }}
+      CSV_MAP_SALES_ESTIMATED_QUOTA_RELIEF: ${{ secrets.CSV_MAP_SALES_ESTIMATED_QUOTA_RELIEF }}
+      CSV_MAP_CLOSE_DATE:                 ${{ secrets.CSV_MAP_CLOSE_DATE }}
+      CSV_MAP_NEXT_STEP_DATE:             ${{ secrets.CSV_MAP_NEXT_STEP_DATE }}
+      CSV_MAP_NEXT_STEP:                  ${{ secrets.CSV_MAP_NEXT_STEP }}
+      CSV_MAP_FORECAST_CATEGORY:          ${{ secrets.CSV_MAP_FORECAST_CATEGORY }}
+      CSV_MAP_TYPE:                       ${{ secrets.CSV_MAP_TYPE }}
+      CSV_MAP_METRICS:                    ${{ secrets.CSV_MAP_METRICS }}
+      CSV_MAP_ECONOMIC_BUYER:             ${{ secrets.CSV_MAP_ECONOMIC_BUYER }}
+      CSV_MAP_DECISION_CRITERIA:          ${{ secrets.CSV_MAP_DECISION_CRITERIA }}
+      CSV_MAP_DECISION_PROCESS:           ${{ secrets.CSV_MAP_DECISION_PROCESS }}
+      CSV_MAP_PAPER_PROCESS:              ${{ secrets.CSV_MAP_PAPER_PROCESS }}
+      CSV_MAP_IMPLICATED_PAIN:            ${{ secrets.CSV_MAP_IMPLICATED_PAIN }}
+      CSV_MAP_CHAMPION_NAME:              ${{ secrets.CSV_MAP_CHAMPION_NAME }}
+      CSV_MAP_COMPETITOR:                 ${{ secrets.CSV_MAP_COMPETITOR }}
+      CSV_MAP_OTHER_COMPETITOR:           ${{ secrets.CSV_MAP_OTHER_COMPETITOR }}
+      CSV_MAP_CUO_MEETING:                ${{ secrets.CSV_MAP_CUO_MEETING }}
+      CSV_MAP_COMPLETED:                  ${{ secrets.CSV_MAP_COMPLETED }}
+      CSV_MAP_EVALUATION_AGREED:          ${{ secrets.CSV_MAP_EVALUATION_AGREED }}
+      CSV_MAP_PRICING_DISCUSSED:          ${{ secrets.CSV_MAP_PRICING_DISCUSSED }}
+      CSV_MAP_DECISION_CRITERIA_MET:      ${{ secrets.CSV_MAP_DECISION_CRITERIA_MET }}
+      CSV_MAP_ECONOMIC_BUYER_APPROVED:    ${{ secrets.CSV_MAP_ECONOMIC_BUYER_APPROVED }}
+      CSV_MAP_DEPARTMENT:                 ${{ secrets.CSV_MAP_DEPARTMENT }}
+      CSV_MAP_IRONCLAD_SIGNATORY:         ${{ secrets.CSV_MAP_IRONCLAD_SIGNATORY }}
+      CSV_MAP_MAP_URL:                    ${{ secrets.CSV_MAP_MAP_URL }}
+      CSV_MAP_THREE_WHYS:                 ${{ secrets.CSV_MAP_THREE_WHYS }}
+      CSV_MAP_PLAN:                       ${{ secrets.CSV_MAP_PLAN }}
+      CSV_MAP_NUMBER_OF_PLAN_SEATS:       ${{ secrets.CSV_MAP_NUMBER_OF_PLAN_SEATS }}
+      CSV_MAP_CREATED_DATE:               ${{ secrets.CSV_MAP_CREATED_DATE }}
 
       # ── Logging ──────────────────────────────────────────────────────
       LOG_FILE: logs/sync.log

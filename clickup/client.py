@@ -12,7 +12,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://api.clickup-stg.com/api/v2"
+_BASE_URL = "https://api.clickup.com/api/v2"
 _MAX_RETRIES = 3
 
 
@@ -37,14 +37,6 @@ class ClickUpClient:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-
-    def get_list_fields(self) -> list[dict]:
-        """
-        Fetch all custom fields defined on this ClickUp list.
-        Returns a list of field dicts containing id, name, type, etc.
-        """
-        data = self._get(f"/list/{self._list_id}/field")
-        return data.get("fields", [])
 
     def get_all_tasks(self) -> list[dict]:
         """
