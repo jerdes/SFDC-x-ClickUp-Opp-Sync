@@ -70,14 +70,100 @@ _NUMBER_FIELDS = {"sales_estimated_quota_relief"}
 # Canonical names that map to ClickUp url fields (value must start with http/https)
 _URL_FIELDS = {"map_url", "three_whys"}
 
+# Canonical names that map to ClickUp dropdown fields.
+# These need option-id mapping when the configured ClickUp field type is drop_down.
+_DROPDOWN_FIELDS = {"stage", "forecast_category"}
+
+
+def _forecast_aliases(option_name: str) -> list[str]:
+    """Return known CSV aliases for forecast category options."""
+    n = _normalize_dropdown_label(option_name)
+    aliases: list[str] = []
+    if "best case" in n:
+        aliases.extend(["best case", "pipeline"])
+    if "likely" in n:
+        aliases.extend(["likely", "closed lost"])
+    if "commit" in n:
+        aliases.extend(["commit", "closed won"])
+    return aliases
+
 
 def _is_valid_url(value: str) -> bool:
     return value.startswith("http://") or value.startswith("https://")
 
 
+def _normalize_dropdown_label(value: str) -> str:
+    """
+    Normalize dropdown labels for robust matching across formatting differences.
+    Example: "Closed - Won" and "closed won" normalize to the same key.
+    """
+    lowered = value.strip().lower()
+    # Keep alphanumerics, collapse everything else to spaces.
+    collapsed = re.sub(r"[^a-z0-9]+", " ", lowered)
+    return " ".join(collapsed.split())
+
+
+def _extract_stage_indexes(label: str) -> list[str]:
+    """
+    Extract numeric stage indexes from the prefix portion of a stage label.
+    Examples:
+      "4 & 5 - Paper Process & Closing" -> ["4", "5"]
+      "6 - Closed Won" -> ["6"]
+    """
+    prefix = label.split("-", 1)[0]
+    return re.findall(r"\d+", prefix)
+
+
+def build_dropdown_option_maps(list_fields: list[dict], field_ids: dict[str, str]) -> dict[str, dict[str, str]]:
+    """
+    Build canonical dropdown mappings from CSV label -> ClickUp option id.
+
+    Returns:
+        dict of canonical field name -> {normalized_label: option_id}
+    """
+    by_id: dict[str, dict] = {f.get("id", ""): f for f in list_fields}
+    result: dict[str, dict[str, str]] = {}
+
+    for canonical in _DROPDOWN_FIELDS:
+        field_id = field_ids.get(canonical, "")
+        if not field_id:
+            continue
+
+        field = by_id.get(field_id)
+        if not field:
+            logger.warning("Configured field id for '%s' not found in ClickUp list fields: %s", canonical, field_id)
+            continue
+
+        if field.get("type") != "drop_down":
+            continue
+
+        options = field.get("type_config", {}).get("options", [])
+        option_map: dict[str, str] = {}
+        for opt in options:
+            name = str(opt.get("name", "")).strip().lower()
+            opt_id = str(opt.get("id", "")).strip()
+            if name and opt_id:
+                option_map[name] = opt_id
+                option_map[_normalize_dropdown_label(name)] = opt_id
+
+                # Stage-specific aliases keyed by stage index allow resilient mapping
+                # when CSV label text differs but index is stable.
+                if canonical == "stage":
+                    for idx in _extract_stage_indexes(name):
+                        option_map[f"__stage_index__{idx}"] = opt_id
+                if canonical == "forecast_category":
+                    for alias in _forecast_aliases(name):
+                        option_map[_normalize_dropdown_label(alias)] = opt_id
+
+        result[canonical] = option_map
+
+    return result
+
+
 def build_custom_fields_payload(
     opportunity: "Opportunity",  # type: ignore[name-defined]  # forward ref
     field_ids: dict[str, str],
+    dropdown_option_maps: dict[str, dict[str, str]] | None = None,
 ) -> list[dict]:
     """
     Build the custom_fields array for a ClickUp create/update request body.
@@ -163,6 +249,33 @@ def build_custom_fields_payload(
                         value, canonical,
                     )
 
+        elif canonical in _DROPDOWN_FIELDS:
+            if value:
+                option_map = (dropdown_option_maps or {}).get(canonical, {})
+                if option_map:
+                    raw_key = value.strip().lower()
+                    norm_key = _normalize_dropdown_label(value)
+                    option_id = option_map.get(raw_key) or option_map.get(norm_key)
+
+                    if not option_id and canonical == "stage":
+                        stage_indexes = _extract_stage_indexes(value)
+                        for idx in stage_indexes:
+                            option_id = option_map.get(f"__stage_index__{idx}")
+                            if option_id:
+                                break
+
+                    if option_id:
+                        payload.append({"id": field_id, "value": option_id})
+                    else:
+                        logger.warning(
+                            "No dropdown option match for field '%s' value '%s' — skipping field.",
+                            canonical,
+                            value,
+                        )
+                else:
+                    # Backward-compatible fallback (non-dropdown field or no list metadata)
+                    payload.append({"id": field_id, "value": value})
+
         else:
             # text / short_text — pass as-is
             if value:
@@ -204,6 +317,7 @@ def get_changed_fields_payload(
     opportunity: "Opportunity",  # type: ignore[name-defined]
     existing_task: dict,
     field_ids: dict[str, str],
+    dropdown_option_maps: dict[str, dict[str, str]] | None = None,
 ) -> list[dict]:
     """
     Return a custom_fields payload containing only fields whose target value
@@ -218,7 +332,7 @@ def get_changed_fields_payload(
         Subset of build_custom_fields_payload(opportunity, field_ids) containing
         only entries where the value has changed.
     """
-    target_payload = build_custom_fields_payload(opportunity, field_ids)
+    target_payload = build_custom_fields_payload(opportunity, field_ids, dropdown_option_maps)
 
     # Index current ClickUp field values by field UUID
     current_by_id: dict[str, object] = {

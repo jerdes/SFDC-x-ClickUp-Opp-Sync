@@ -21,6 +21,14 @@ def _require(key: str) -> str:
     return value
 
 
+def _require_any(keys: list[str]) -> str:
+    for key in keys:
+        value = os.getenv(key)
+        if value:
+            return value
+    raise ValueError(f"Missing required environment variable (one of): {', '.join(keys)}")
+
+
 def _optional(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
@@ -137,7 +145,7 @@ def load_settings() -> Settings:
         gmail_imap_host=_optional("GMAIL_IMAP_HOST", "imap.gmail.com"),
         gmail_subject_pattern=_optional("GMAIL_SUBJECT_PATTERN", "Salesforce Opportunity"),
         gmail_attachment_name_pattern=_optional("GMAIL_ATTACHMENT_NAME_PATTERN", ".csv"),
-        clickup_api_token=_require("CLICKUP_API_TOKEN"),
+        clickup_api_token=_require_any(["CLICKUP_API_TOKEN", "CLICKUP_STAGING_API_KEY"]),
         clickup_list_id=_require("CLICKUP_LIST_ID"),
         clickup_field_ids=clickup_field_ids,
         csv_field_map=csv_field_map,

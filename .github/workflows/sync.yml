@@ -25,6 +25,8 @@ jobs:
 
       # ── ClickUp ──────────────────────────────────────────────────────
       CLICKUP_API_TOKEN:          ${{ secrets.CLICKUP_API_TOKEN }}
+      CLICKUP_STAGING_API_KEY:    ${{ secrets.CLICKUP_STAGING_API_KEY }}
+      CLICKUP_BASE_URL:           ${{ secrets.CLICKUP_BASE_URL || 'https://api.clickup.com/api/v2' }}
       CLICKUP_LIST_ID:            ${{ secrets.CLICKUP_LIST_ID }}
       CLICKUP_CLOSED_STAGES:      ${{ secrets.CLICKUP_CLOSED_STAGES || 'Closed Won,Closed Lost' }}
 

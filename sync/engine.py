@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass, field
 
 from clickup.client import ClickUpClient, ClickUpAPIError
-from clickup.models import build_custom_fields_payload, get_changed_fields_payload
+from clickup.models import build_custom_fields_payload, build_dropdown_option_maps, get_changed_fields_payload
 from sync.matcher import match_opportunities
 from sync.parser import Opportunity
 
@@ -44,14 +44,21 @@ def run_sync(
     summary = SyncSummary()
 
     logger.info("Fetching all ClickUp tasks...")
-    all_tasks = clickup_client.get_all_tasks()
+    all_tasks = clickup_client.get_all_tasks(sf_id_field_id)
+
+    dropdown_option_maps: dict[str, dict[str, str]] = {}
+    try:
+        list_fields = clickup_client.get_list_fields()
+        dropdown_option_maps = build_dropdown_option_maps(list_fields, field_ids)
+    except ClickUpAPIError as exc:
+        logger.warning("Could not fetch list fields for dropdown mapping; using raw CSV values. Error: %s", exc)
 
     match = match_opportunities(opportunities, all_tasks, sf_id_field_id)
 
     # --- Create ---
     for opp in match.to_create:
         try:
-            custom_fields = build_custom_fields_payload(opp, field_ids)
+            custom_fields = build_custom_fields_payload(opp, field_ids, dropdown_option_maps)
             clickup_client.create_task(opp.name, custom_fields)
             summary.created += 1
             logger.info("CREATED  '%s' (SF id=%s)", opp.name, opp.sf_opportunity_id)
@@ -68,7 +75,7 @@ def run_sync(
     for opp, task in match.to_update:
         task_id = task["id"]
         try:
-            changed_fields = get_changed_fields_payload(opp, task, field_ids)
+            changed_fields = get_changed_fields_payload(opp, task, field_ids, dropdown_option_maps)
             name_changed = opp.name != task.get("name", "")
 
             if not changed_fields and not name_changed:
