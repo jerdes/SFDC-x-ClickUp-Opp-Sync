@@ -16,6 +16,7 @@ jobs:
     env:
       CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
       CLICKUP_LIST_ID:   ${{ secrets.CLICKUP_LIST_ID }}
+      CLICKUP_BASE_URL:  ${{ secrets.CLICKUP_BASE_URL || "https://api.clickup.com/api/v2" }}
       # These are not used by --list-fields but load_settings() requires them
       GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}

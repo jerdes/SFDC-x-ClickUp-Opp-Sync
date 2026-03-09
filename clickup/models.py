@@ -70,6 +70,49 @@ _NUMBER_FIELDS = {"sales_estimated_quota_relief"}
 # Canonical names that map to ClickUp url fields (value must start with http/https)
 _URL_FIELDS = {"map_url", "three_whys"}
 
+# Canonical names that map to ClickUp dropdown custom fields
+_DROPDOWN_FIELDS = {"stage", "forecast_category"}
+
+
+def _norm_option_name(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
+def build_dropdown_option_maps(
+    list_fields: list[dict],
+    field_ids: dict[str, str],
+) -> dict[str, dict[str, str]]:
+    """
+    Build canonical dropdown option maps from ClickUp list field metadata.
+
+    Returns:
+        {canonical_name: {normalized_option_name: option_id}}
+    """
+    id_to_canonical = {v: k for k, v in field_ids.items() if k in _DROPDOWN_FIELDS and v}
+    maps: dict[str, dict[str, str]] = {}
+
+    for field in list_fields:
+        field_id = field.get("id", "")
+        canonical = id_to_canonical.get(field_id)
+        if not canonical:
+            continue
+
+        if field.get("type") != "drop_down":
+            continue
+
+        options = field.get("type_config", {}).get("options", [])
+        option_map: dict[str, str] = {}
+        for option in options:
+            name = str(option.get("name", "")).strip()
+            option_id = str(option.get("id", "")).strip()
+            if name and option_id:
+                option_map[_norm_option_name(name)] = option_id
+
+        if option_map:
+            maps[canonical] = option_map
+
+    return maps
+
 
 def _is_valid_url(value: str) -> bool:
     return value.startswith("http://") or value.startswith("https://")
@@ -78,6 +121,7 @@ def _is_valid_url(value: str) -> bool:
 def build_custom_fields_payload(
     opportunity: "Opportunity",  # type: ignore[name-defined]  # forward ref
     field_ids: dict[str, str],
+    dropdown_option_maps: dict[str, dict[str, str]] | None = None,
 ) -> list[dict]:
     """
     Build the custom_fields array for a ClickUp create/update request body.
@@ -163,6 +207,19 @@ def build_custom_fields_payload(
                         value, canonical,
                     )
 
+        elif canonical in _DROPDOWN_FIELDS:
+            if value:
+                option_map = (dropdown_option_maps or {}).get(canonical, {})
+                option_id = option_map.get(_norm_option_name(value))
+                if option_id:
+                    payload.append({"id": field_id, "value": option_id})
+                else:
+                    logger.warning(
+                        "Skipping dropdown value '%s' for field '%s' — no matching ClickUp option.",
+                        value,
+                        canonical,
+                    )
+
         else:
             # text / short_text — pass as-is
             if value:
@@ -204,6 +261,7 @@ def get_changed_fields_payload(
     opportunity: "Opportunity",  # type: ignore[name-defined]
     existing_task: dict,
     field_ids: dict[str, str],
+    dropdown_option_maps: dict[str, dict[str, str]] | None = None,
 ) -> list[dict]:
     """
     Return a custom_fields payload containing only fields whose target value
@@ -218,7 +276,7 @@ def get_changed_fields_payload(
         Subset of build_custom_fields_payload(opportunity, field_ids) containing
         only entries where the value has changed.
     """
-    target_payload = build_custom_fields_payload(opportunity, field_ids)
+    target_payload = build_custom_fields_payload(opportunity, field_ids, dropdown_option_maps)
 
     # Index current ClickUp field values by field UUID
     current_by_id: dict[str, object] = {
