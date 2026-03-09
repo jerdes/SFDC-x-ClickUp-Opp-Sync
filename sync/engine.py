@@ -44,7 +44,7 @@ def run_sync(
     summary = SyncSummary()
 
     logger.info("Fetching all ClickUp tasks...")
-    all_tasks = clickup_client.get_all_tasks()
+    all_tasks = clickup_client.get_all_tasks(sf_id_field_id)
 
     match = match_opportunities(opportunities, all_tasks, sf_id_field_id)
 
