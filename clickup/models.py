@@ -32,20 +32,15 @@ def get_custom_field_value(task: dict, field_id: str) -> str | None:
 
 def _to_timestamp_ms(date_str: str) -> int | None:
     """
-    Convert a date string to Unix timestamp in milliseconds (required by ClickUp date fields).
-    Handles formats Salesforce commonly exports: M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD.
+    Convert a DD/MM/YYYY date string to Unix timestamp in milliseconds (required by ClickUp).
     Returns None if parsing fails.
     """
-    formats = ("%m/%d/%Y", "%Y-%m-%d", "%m-%d-%Y", "%d/%m/%Y")
-    clean = date_str.strip()
-    for fmt in formats:
-        try:
-            dt = datetime.strptime(clean, fmt).replace(tzinfo=timezone.utc)
-            return int(dt.timestamp() * 1000)
-        except ValueError:
-            continue
-    logger.warning("Could not parse date '%s' — skipping field.", date_str)
-    return None
+    try:
+        dt = datetime.strptime(date_str.strip(), "%d/%m/%Y").replace(tzinfo=timezone.utc)
+        return int(dt.timestamp() * 1000)
+    except ValueError:
+        logger.warning("Could not parse date '%s' (expected DD/MM/YYYY) — skipping field.", date_str)
+        return None
 
 
 def _to_number(value_str: str) -> float | None:
@@ -70,40 +65,39 @@ _NUMBER_FIELDS = {"sales_estimated_quota_relief"}
 # Canonical names that map to ClickUp url fields (value must start with http/https)
 _URL_FIELDS = {"map_url", "three_whys"}
 
-# Hardcoded CSV value → ClickUp option UUID maps for dropdown fields.
-# ClickUp's POST/PUT custom field API requires the option UUID, not the option text
-# or its orderindex.  Multiple CSV spellings can map to the same UUID.
-_STAGE_MAP: dict[str, str] = {
-    "0 - pre acceptance":               "2c959e13-554d-448d-9468-e840e0b5babb",
-    "0 - pre-acceptance":               "2c959e13-554d-448d-9468-e840e0b5babb",
-    "1 - initial interest":             "19143056-7265-4bd4-a448-e261db5a3310",
-    "2 - investigate & educate":        "f7a4af3e-882f-4358-8c01-d9d7628d1db6",
-    "3 - proposal":                     "7336c6d0-125a-45e6-aecc-c8293d67b698",
-    "3 - validate & justify":           "7336c6d0-125a-45e6-aecc-c8293d67b698",
-    "4 - negotiation":                  "edde4543-fee9-48c9-8516-1a474756c31e",
-    "4 - finalize":                     "edde4543-fee9-48c9-8516-1a474756c31e",
-    "4 - paper process":                "edde4543-fee9-48c9-8516-1a474756c31e",
-    "4 & 5 - paper process & closing":  "edde4543-fee9-48c9-8516-1a474756c31e",
-    "5 - closing":                      "edde4543-fee9-48c9-8516-1a474756c31e",
-    "6 - closed won":                   "a87bc1f2-b39e-4884-8cc2-3ed54b46388e",
-    "closed won":                       "a87bc1f2-b39e-4884-8cc2-3ed54b46388e",
-    "7 - closed lost":                  "67d93608-1d17-40ba-aff4-1722934f964b",
-    "closed lost":                      "67d93608-1d17-40ba-aff4-1722934f964b",
+# Canonical names that map to ClickUp checkbox fields (CSV: "1" = checked, "0" = unchecked)
+_CHECKBOX_FIELDS = {
+    "cuo_meeting_completed",
+    "evaluation_agreed",
+    "pricing_discussed",
+    "decision_criteria_met",
+    "economic_buyer_approved",
 }
 
-_FORECAST_CATEGORY_MAP: dict[str, str] = {
-    "best case":  "7e6232aa-5350-4633-9123-adffeaf5f90f",
-    "pipeline":   "7e6232aa-5350-4633-9123-adffeaf5f90f",
-    "likely":     "8a1f2085-6edc-4ae0-bf06-27e7487d5844",
-    "closed lost":"8a1f2085-6edc-4ae0-bf06-27e7487d5844",
-    "commit":     "28272d00-42a0-4493-89d9-c97ffdb585a3",
-    "closed won": "28272d00-42a0-4493-89d9-c97ffdb585a3",
+# Static maps: CSV value (lowercased) → exact ClickUp option name (as returned by the API).
+# The orderindex is looked up live from the ClickUp list fields at runtime, so
+# reordering options in ClickUp never breaks the sync.
+_STAGE_CSV_TO_CLICKUP: dict[str, str] = {
+    "0 - pre-acceptance":        "0 - pre acceptance",
+    "1 - initial interest":      "1 - initial interest",
+    "2 - investigate & educate": "2 - investigate & educate",
+    "3 - validate & justify":    "3 - validate & justify",
+    "4 - paper process":         "4 & 5 - paper process & closing",
+    "5 - closing":               "4 & 5 - paper process & closing",
+    "6 - closed won":            "6 - closed won",
+    "7 - closed lost":           "closed lost",
 }
 
-# Maps canonical field name → CSV-value-to-UUID lookup
-_DROPDOWN_UUID_MAPS: dict[str, dict[str, str]] = {
-    "stage":             _STAGE_MAP,
-    "forecast_category": _FORECAST_CATEGORY_MAP,
+_FORECAST_CATEGORY_CSV_TO_CLICKUP: dict[str, str] = {
+    "best case": "best case",
+    "likely":    "likely",
+    "commit":    "commit",
+}
+
+# Maps canonical field name → CSV-value-to-ClickUp-name lookup
+_DROPDOWN_CSV_MAPS: dict[str, dict[str, str]] = {
+    "stage":             _STAGE_CSV_TO_CLICKUP,
+    "forecast_category": _FORECAST_CATEGORY_CSV_TO_CLICKUP,
 }
 
 
@@ -135,7 +129,7 @@ def build_dropdown_maps_from_fields(
     _DROPDOWN_TYPES = {"drop_down", "dropdown", "labels"}
     _TEXT_TYPES = {"short_text", "text", "url", "email"}
 
-    _DROPDOWN_CANONICALS = set(_DROPDOWN_UUID_MAPS.keys())
+    _DROPDOWN_CANONICALS = set(_DROPDOWN_CSV_MAPS.keys())
 
     uuid_to_canonical: dict[str, str] = {
         field_ids[canon]: canon
@@ -173,7 +167,7 @@ def build_dropdown_maps_from_fields(
             name = opt.get("name")
             orderindex = opt.get("orderindex")
             if name is not None and orderindex is not None:
-                name_to_orderindex[name.strip().lower()] = int(orderindex)
+                name_to_orderindex[name.lower().strip()] = int(orderindex)
         result[canonical] = name_to_orderindex
         logger.info(
             "Dropdown '%s': loaded %d option(s) from ClickUp: %s",
@@ -222,15 +216,6 @@ def build_custom_fields_payload(
     Returns:
         List of {"id": "<uuid>", "value": <value>} dicts.
     """
-    # Fields that carry boolean/checkbox semantics in the CSV
-    _CHECKBOX_FIELDS = {
-        "cuo_meeting_completed",
-        "evaluation_agreed",
-        "pricing_discussed",
-        "decision_criteria_met",
-        "economic_buyer_approved",
-    }
-
     payload: list[dict] = []
 
     # Map canonical name -> value from the Opportunity dataclass
@@ -271,8 +256,7 @@ def build_custom_fields_payload(
         if canonical in _CHECKBOX_FIELDS:
             if not value.strip():
                 continue  # no CSV value — leave the checkbox as-is in ClickUp
-            # CSV exports '1' for checked, '0' for unchecked
-            bool_val = value.strip() in ("1", "true", "yes", "checked", "✓")
+            bool_val = value.strip() == "1"
             payload.append({"id": field_id, "value": bool_val})
 
         elif canonical in _DATE_FIELDS:
@@ -297,29 +281,36 @@ def build_custom_fields_payload(
                         value, canonical,
                     )
 
-        elif canonical in _DROPDOWN_UUID_MAPS:
+        elif canonical in _DROPDOWN_CSV_MAPS:
             if value:
                 # If the configured ClickUp field is plain text, write directly.
                 if text_canonicals and canonical in text_canonicals:
                     payload.append({"id": field_id, "value": value.strip()})
                 else:
-                    # Dropdown field — expects orderindex (integer).
+                    # Dropdown field — two-step: CSV value → ClickUp name → orderindex.
                     csv_key = value.strip().lower()
-                    if dropdown_maps is not None and canonical in dropdown_maps:
-                        orderindex = dropdown_maps[canonical].get(csv_key)
+                    clickup_name = _DROPDOWN_CSV_MAPS[canonical].get(csv_key)
+                    if clickup_name is None:
+                        logger.warning(
+                            "No mapping for %s CSV value '%s' — skipping. "
+                            "Known CSV values: %s",
+                            canonical, value, list(_DROPDOWN_CSV_MAPS[canonical].keys()),
+                        )
+                    elif dropdown_maps is not None and canonical in dropdown_maps:
+                        orderindex = dropdown_maps[canonical].get(clickup_name.lower())
                         if orderindex is not None:
                             payload.append({"id": field_id, "value": orderindex})
                         else:
                             logger.warning(
-                                "No ClickUp option for %s value '%s' — skipping. "
-                                "Known values: %s",
-                                canonical, value, list(dropdown_maps[canonical].keys()),
+                                "CSV value '%s' maps to ClickUp option '%s' but that "
+                                "option was not found in the live field options for '%s'. "
+                                "Known ClickUp options: %s",
+                                value, clickup_name, canonical,
+                                list(dropdown_maps[canonical].keys()),
                             )
                     else:
-                        # No dynamic maps and not text — skip with a warning
                         logger.warning(
-                            "No dropdown map available for '%s' (value='%s') and field "
-                            "is not plain text — skipping.",
+                            "No live dropdown options loaded for '%s' (value='%s') — skipping.",
                             canonical, value,
                         )
 
