@@ -23,11 +23,14 @@ class SyncSummary:
     errors: list[str] = field(default_factory=list)
 
 
+_DROPDOWN_TYPES = {"drop_down", "labels"}
+
+
 def _build_field_options(list_fields: list[dict]) -> dict[str, dict[str, int]]:
     """
-    Build a lookup of drop_down option names -> orderindex, keyed by field UUID.
+    Build a lookup of drop_down/labels option names -> orderindex, keyed by field UUID.
 
-    ClickUp drop_down fields require the integer orderindex of the chosen option,
+    ClickUp dropdown-style fields require the integer orderindex of the chosen option,
     not the display text.  This lookup is built once per sync run from the list's
     field definitions and threaded through all payload-building calls.
 
@@ -36,13 +39,24 @@ def _build_field_options(list_fields: list[dict]) -> dict[str, dict[str, int]]:
     """
     result: dict[str, dict[str, int]] = {}
     for f in list_fields:
-        if f.get("type") == "drop_down":
+        field_type = f.get("type", "")
+        logger.debug("List field '%s' (id=%s) has type='%s'", f.get("name"), f.get("id"), field_type)
+        if field_type in _DROPDOWN_TYPES:
             options = f.get("type_config", {}).get("options", [])
-            result[f["id"]] = {
-                opt["name"].lower(): opt["orderindex"]
-                for opt in options
-                if opt.get("name") is not None and opt.get("orderindex") is not None
-            }
+            option_map = {}
+            for opt in options:
+                name = opt.get("name")
+                orderindex = opt.get("orderindex")
+                if name is not None and orderindex is not None:
+                    try:
+                        option_map[name.lower()] = int(orderindex)
+                    except (ValueError, TypeError):
+                        pass
+            result[f["id"]] = option_map
+            logger.info(
+                "Dropdown field '%s' (id=%s, type=%s): %d option(s) indexed: %s",
+                f.get("name"), f.get("id"), field_type, len(option_map), list(option_map.keys()),
+            )
     logger.debug("Built dropdown option map for %d field(s).", len(result))
     return result
 
@@ -73,6 +87,8 @@ def run_sync(
     logger.info("Fetching list field definitions...")
     list_fields = clickup_client.get_list_fields()
     field_options = _build_field_options(list_fields)
+
+    closed_status = "DONE"
 
     logger.info("Fetching all ClickUp tasks...")
     all_tasks = clickup_client.get_all_tasks(sf_id_field_id)
@@ -141,7 +157,7 @@ def run_sync(
         task_id = task["id"]
         task_name = task.get("name", task_id)
         try:
-            clickup_client.close_orphan_task(task_id)
+            clickup_client.close_orphan_task(task_id, closed_status)
             summary.closed += 1
             logger.info("CLOSED   '%s' (CU id=%s) — SF ID not in CSV", task_name, task_id)
         except ClickUpAPIError as exc:
