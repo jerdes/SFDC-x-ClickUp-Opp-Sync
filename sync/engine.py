@@ -29,6 +29,7 @@ def run_sync(
     sf_id_field_id: str,
     field_ids: dict[str, str],
     dropdown_maps: dict[str, dict[str, str]] | None = None,
+    text_canonicals: set[str] | None = None,
 ) -> SyncSummary:
     """
     Main sync loop. Rules:
@@ -54,7 +55,7 @@ def run_sync(
     # --- Create ---
     for opp in match.to_create:
         try:
-            custom_fields = build_custom_fields_payload(opp, field_ids, dropdown_maps)
+            custom_fields = build_custom_fields_payload(opp, field_ids, dropdown_maps, text_canonicals)
             task = clickup_client.create_task(opp.name, custom_fields)
 
             # Explicitly set the SF Opportunity ID via the dedicated field endpoint.
@@ -80,7 +81,7 @@ def run_sync(
     for opp, task in match.to_update:
         task_id = task["id"]
         try:
-            changed_fields = get_changed_fields_payload(opp, task, field_ids, dropdown_maps)
+            changed_fields = get_changed_fields_payload(opp, task, field_ids, dropdown_maps, text_canonicals)
             name_changed = opp.name != task.get("name", "")
 
             if not changed_fields and not name_changed:
