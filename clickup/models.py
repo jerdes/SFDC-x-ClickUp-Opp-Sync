@@ -110,21 +110,21 @@ _DROPDOWN_UUID_MAPS: dict[str, dict[str, str]] = {
 def build_dropdown_maps_from_fields(
     list_fields: list[dict],
     field_ids: dict[str, str],
-) -> dict[str, dict[str, str]]:
+) -> dict[str, dict[str, int]]:
     """
-    Build csv_value → option_uuid maps for dropdown fields by reading the
+    Build csv_value → orderindex maps for dropdown fields by reading the
     actual options from the ClickUp list field definitions returned by
-    GET /list/{id}/field.  This replaces the hardcoded _STAGE_MAP /
-    _FORECAST_CATEGORY_MAP with values that are correct for whichever
-    ClickUp workspace (production, staging, etc.) the sync is running against.
+    GET /list/{id}/field.
+
+    ClickUp's POST /task/{id}/field/{field_id} endpoint expects the
+    **orderindex** (integer) for dropdown fields, NOT the option UUID.
 
     Args:
         list_fields: Raw list of field dicts from ClickUpClient.get_list_fields().
         field_ids:   canonical_name → ClickUp field UUID mapping from settings.
 
     Returns:
-        Dict mapping canonical dropdown name → {csv_display_name_lower → option_uuid}.
-        Falls back to hardcoded maps for any canonical not found via the API.
+        Dict mapping canonical dropdown name → {csv_display_name_lower → orderindex}.
     """
     _DROPDOWN_CANONICALS = set(_DROPDOWN_UUID_MAPS.keys())
     uuid_to_canonical: dict[str, str] = {
@@ -133,7 +133,7 @@ def build_dropdown_maps_from_fields(
         if canon in field_ids
     }
 
-    result: dict[str, dict[str, str]] = {}
+    result: dict[str, dict[str, int]] = {}
     for field in list_fields:
         field_id = field.get("id")
         canonical = uuid_to_canonical.get(field_id)
@@ -142,28 +142,27 @@ def build_dropdown_maps_from_fields(
         if field.get("type") != "drop_down":
             continue
         options = field.get("type_config", {}).get("options", [])
-        name_to_uuid = {
-            opt["name"].strip().lower(): opt["id"]
-            for opt in options
-            if opt.get("name") and opt.get("id")
-        }
-        result[canonical] = name_to_uuid
+        name_to_orderindex: dict[str, int] = {}
+        for opt in options:
+            name = opt.get("name")
+            orderindex = opt.get("orderindex")
+            if name is not None and orderindex is not None:
+                name_to_orderindex[name.strip().lower()] = int(orderindex)
+        result[canonical] = name_to_orderindex
         logger.info(
             "Dropdown '%s': loaded %d option(s) from ClickUp: %s",
             canonical,
-            len(name_to_uuid),
-            list(name_to_uuid.keys()),
+            len(name_to_orderindex),
+            list(name_to_orderindex.keys()),
         )
 
-    # Fall back to hardcoded maps for any dropdown canonical not resolved via API
     for canon in _DROPDOWN_CANONICALS:
         if canon not in result:
             logger.warning(
                 "Dropdown '%s': could not load options from ClickUp API — "
-                "falling back to hardcoded UUIDs (may be wrong for this workspace).",
+                "field ID may be missing or field is not a dropdown.",
                 canon,
             )
-            result[canon] = _DROPDOWN_UUID_MAPS[canon]
 
     return result
 
@@ -267,21 +266,33 @@ def build_custom_fields_payload(
                     )
 
         elif canonical in _DROPDOWN_UUID_MAPS:
-            # Dropdown field — ClickUp requires the option UUID, not the display text.
-            # Prefer the dynamically-fetched maps (correct for this workspace);
-            # fall back to the hardcoded maps if none were provided.
+            # Dropdown field — ClickUp's POST /task/{id}/field/{field_id}
+            # endpoint expects the orderindex (integer), not the option UUID.
+            # Use the dynamically-fetched maps (name → orderindex) when available.
             if value:
-                active_maps = dropdown_maps if dropdown_maps is not None else _DROPDOWN_UUID_MAPS
-                uuid_map = active_maps.get(canonical, _DROPDOWN_UUID_MAPS[canonical])
-                option_uuid = uuid_map.get(value.strip().lower())
-                if option_uuid is not None:
-                    payload.append({"id": field_id, "value": option_uuid})
+                csv_key = value.strip().lower()
+                if dropdown_maps is not None and canonical in dropdown_maps:
+                    orderindex = dropdown_maps[canonical].get(csv_key)
+                    if orderindex is not None:
+                        payload.append({"id": field_id, "value": orderindex})
+                    else:
+                        logger.warning(
+                            "No ClickUp option for %s value '%s' — skipping. "
+                            "Known values: %s",
+                            canonical, value, list(dropdown_maps[canonical].keys()),
+                        )
                 else:
-                    logger.warning(
-                        "No ClickUp option UUID for %s value '%s' — skipping. "
-                        "Known values: %s",
-                        canonical, value, list(uuid_map.keys()),
-                    )
+                    # No dynamic maps available — fall back to hardcoded UUID map
+                    uuid_map = _DROPDOWN_UUID_MAPS[canonical]
+                    option_uuid = uuid_map.get(csv_key)
+                    if option_uuid is not None:
+                        payload.append({"id": field_id, "value": option_uuid})
+                    else:
+                        logger.warning(
+                            "No ClickUp option UUID for %s value '%s' — skipping. "
+                            "Known values: %s",
+                            canonical, value, list(uuid_map.keys()),
+                        )
 
         else:
             # text / short_text — pass as-is
