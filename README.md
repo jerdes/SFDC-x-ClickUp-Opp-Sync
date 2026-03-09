@@ -62,7 +62,51 @@ curl -s -H "Authorization: YOUR_CLICKUP_TOKEN" \
 
 Copy each field's `id` into the corresponding `CLICKUP_FIELD_ID_*` variable in `.env`.
 
-### 5. Set up cron
+### 5. Schedule the sync
+
+Choose one of the two options below.
+
+#### Option A — GitHub Actions (recommended)
+
+The workflow file is already included at `.github/workflows/sync.yml`. It fires every
+weekday at **9:10 AM Sydney time** and uploads the log as a downloadable artifact.
+
+All you need to do is add secrets to your GitHub repo:
+
+1. Go to your repo → **Settings → Secrets and variables → Actions → New repository secret**
+2. Add each of the following:
+
+**Required:**
+
+| Secret | Value |
+|---|---|
+| `GMAIL_ADDRESS` | Your Gmail address |
+| `GMAIL_APP_PASSWORD` | The 16-char App Password from step 1 |
+| `CLICKUP_API_TOKEN` | Your ClickUp personal API token |
+| `CLICKUP_LIST_ID` | List ID from the ClickUp URL |
+| `CLICKUP_FIELD_ID_SF_OPPORTUNITY_ID` | UUID of the "Salesforce ID" custom field |
+
+**Also required — one per synced field** (all named `CLICKUP_FIELD_ID_*`):
+
+```
+CLICKUP_FIELD_ID_OWNER, CLICKUP_FIELD_ID_ACCOUNT_NAME, CLICKUP_FIELD_ID_STAGE,
+CLICKUP_FIELD_ID_ARR, CLICKUP_FIELD_ID_CLOSE_DATE, CLICKUP_FIELD_ID_NEXT_STEP,
+CLICKUP_FIELD_ID_NEXT_STEP_DATE, CLICKUP_FIELD_ID_FORECAST_CATEGORY, ...
+```
+
+(See `.env.example` for the full list of `CLICKUP_FIELD_ID_*` and optional `CSV_MAP_*` names.)
+
+**Optional overrides** (only needed if your Salesforce report uses non-default column headers):
+
+- `GMAIL_SUBJECT_PATTERN`, `GMAIL_ATTACHMENT_NAME_PATTERN`
+- `CLICKUP_CLOSED_STAGES` (default: `Closed Won,Closed Lost`)
+- `CSV_MAP_*` — one per field if your CSV headers differ from the defaults
+
+To trigger a **manual run** at any time: go to **Actions → Salesforce → ClickUp Sync → Run workflow**.
+
+Logs are uploaded as a GitHub artifact (`sync-logs-<run-id>`) after every run and kept for 30 days.
+
+#### Option B — System cron
 
 Open your crontab:
 
@@ -73,8 +117,9 @@ crontab -e
 Add this line (adjust the Python path and time as needed):
 
 ```cron
-# Run SF → ClickUp sync every weekday at 7:00 AM
-0 7 * * 1-5 /usr/bin/python3 /home/user/SFDC-x-ClickUp-Opp-Sync/main.py >> /home/user/SFDC-x-ClickUp-Opp-Sync/logs/cron.log 2>&1
+# Run SF → ClickUp sync every weekday at 9:10 AM Sydney time
+TZ=Australia/Sydney
+10 9 * * 1-5 /usr/bin/python3 /home/user/SFDC-x-ClickUp-Opp-Sync/main.py >> /home/user/SFDC-x-ClickUp-Opp-Sync/logs/cron.log 2>&1
 ```
 
 Verify your Python path with `which python3`.
