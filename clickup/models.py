@@ -65,6 +65,15 @@ _NUMBER_FIELDS = {"sales_estimated_quota_relief"}
 # Canonical names that map to ClickUp url fields (value must start with http/https)
 _URL_FIELDS = {"map_url", "three_whys"}
 
+# Canonical names that map to ClickUp checkbox fields (CSV: "1" = checked, "0" = unchecked)
+_CHECKBOX_FIELDS = {
+    "cuo_meeting_completed",
+    "evaluation_agreed",
+    "pricing_discussed",
+    "decision_criteria_met",
+    "economic_buyer_approved",
+}
+
 # Static maps: CSV value (lowercased) → exact ClickUp option name (as returned by the API).
 # The orderindex is looked up live from the ClickUp list fields at runtime, so
 # reordering options in ClickUp never breaks the sync.
@@ -207,15 +216,6 @@ def build_custom_fields_payload(
     Returns:
         List of {"id": "<uuid>", "value": <value>} dicts.
     """
-    # Fields that carry boolean/checkbox semantics in the CSV
-    _CHECKBOX_FIELDS = {
-        "cuo_meeting_completed",
-        "evaluation_agreed",
-        "pricing_discussed",
-        "decision_criteria_met",
-        "economic_buyer_approved",
-    }
-
     payload: list[dict] = []
 
     # Map canonical name -> value from the Opportunity dataclass
@@ -256,8 +256,7 @@ def build_custom_fields_payload(
         if canonical in _CHECKBOX_FIELDS:
             if not value.strip():
                 continue  # no CSV value — leave the checkbox as-is in ClickUp
-            # CSV exports '1' for checked, '0' for unchecked
-            bool_val = value.strip() in ("1", "true", "yes", "checked", "✓")
+            bool_val = value.strip() == "1"
             payload.append({"id": field_id, "value": bool_val})
 
         elif canonical in _DATE_FIELDS:
