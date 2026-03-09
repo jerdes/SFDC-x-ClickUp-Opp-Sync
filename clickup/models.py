@@ -107,6 +107,15 @@ _DROPDOWN_UUID_MAPS: dict[str, dict[str, str]] = {
 }
 
 
+def _normalize_dropdown_key(value: str) -> str:
+    """Normalize a dropdown option name for fuzzy matching.
+    Lowercases, replaces hyphens/en-dashes with spaces, and collapses whitespace.
+    This lets CSV values like '0 - Pre-Acceptance' match ClickUp options like
+    '0 - pre acceptance'.
+    """
+    return re.sub(r"\s+", " ", value.lower().replace("-", " ").replace("\u2013", " ")).strip()
+
+
 def build_dropdown_maps_from_fields(
     list_fields: list[dict],
     field_ids: dict[str, str],
@@ -173,7 +182,7 @@ def build_dropdown_maps_from_fields(
             name = opt.get("name")
             orderindex = opt.get("orderindex")
             if name is not None and orderindex is not None:
-                name_to_orderindex[name.strip().lower()] = int(orderindex)
+                name_to_orderindex[_normalize_dropdown_key(name)] = int(orderindex)
         result[canonical] = name_to_orderindex
         logger.info(
             "Dropdown '%s': loaded %d option(s) from ClickUp: %s",
@@ -304,7 +313,7 @@ def build_custom_fields_payload(
                     payload.append({"id": field_id, "value": value.strip()})
                 else:
                     # Dropdown field — expects orderindex (integer).
-                    csv_key = value.strip().lower()
+                    csv_key = _normalize_dropdown_key(value)
                     if dropdown_maps is not None and canonical in dropdown_maps:
                         orderindex = dropdown_maps[canonical].get(csv_key)
                         if orderindex is not None:
