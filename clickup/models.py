@@ -126,12 +126,28 @@ def build_dropdown_maps_from_fields(
     Returns:
         Dict mapping canonical dropdown name → {csv_display_name_lower → orderindex}.
     """
+    # Field types that carry selectable options with orderindex
+    _DROPDOWN_TYPES = {"drop_down", "dropdown", "labels"}
+
     _DROPDOWN_CANONICALS = set(_DROPDOWN_UUID_MAPS.keys())
+
+    # Log what field IDs are configured for dropdown canonicals
+    for canon in _DROPDOWN_CANONICALS:
+        fid = field_ids.get(canon)
+        logger.info("Dropdown config: canonical '%s' → field_id=%s", canon, fid or "(not set)")
+
     uuid_to_canonical: dict[str, str] = {
         field_ids[canon]: canon
         for canon in _DROPDOWN_CANONICALS
         if canon in field_ids
     }
+
+    # Log all fields returned by the API for diagnostic purposes
+    logger.info(
+        "ClickUp list has %d custom field(s): %s",
+        len(list_fields),
+        [(f.get("name"), f.get("type"), f.get("id")) for f in list_fields],
+    )
 
     result: dict[str, dict[str, int]] = {}
     for field in list_fields:
@@ -139,7 +155,13 @@ def build_dropdown_maps_from_fields(
         canonical = uuid_to_canonical.get(field_id)
         if not canonical:
             continue
-        if field.get("type") != "drop_down":
+        field_type = field.get("type", "")
+        if field_type not in _DROPDOWN_TYPES:
+            logger.warning(
+                "Field '%s' (id=%s) mapped to canonical '%s' has type '%s', "
+                "expected one of %s — skipping dropdown option extraction.",
+                field.get("name"), field_id, canonical, field_type, _DROPDOWN_TYPES,
+            )
             continue
         options = field.get("type_config", {}).get("options", [])
         name_to_orderindex: dict[str, int] = {}
@@ -160,8 +182,8 @@ def build_dropdown_maps_from_fields(
         if canon not in result:
             logger.warning(
                 "Dropdown '%s': could not load options from ClickUp API — "
-                "field ID may be missing or field is not a dropdown.",
-                canon,
+                "check that CLICKUP_FIELD_ID_%s is set and points to a dropdown field.",
+                canon, canon.upper(),
             )
 
     return result
