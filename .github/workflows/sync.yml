@@ -108,6 +108,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: claude/salesforce-clickup-sync-tJFbn
 
       - name: Set up Python
         uses: actions/setup-python@v5
