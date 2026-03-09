@@ -15,14 +15,14 @@ load_dotenv(dotenv_path=_PROJECT_ROOT / ".env")
 
 
 def _require(key: str) -> str:
-    value = os.getenv(key)
+    value = (os.getenv(key) or "").strip()
     if not value:
         raise ValueError(f"Missing required environment variable: {key}")
     return value
 
 
 def _optional(key: str, default: str = "") -> str:
-    return os.getenv(key, default)
+    return (os.getenv(key) or default).strip()
 
 
 @dataclass
