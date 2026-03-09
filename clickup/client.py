@@ -4,6 +4,7 @@ clickup/client.py — All HTTP interactions with the ClickUp REST API v2.
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 import requests
@@ -12,7 +13,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://api.clickup-stg.com/api/v2"
+_DEFAULT_BASE_URL = "https://api.clickup.com/api/v2"
 _MAX_RETRIES = 3
 
 
@@ -70,7 +71,7 @@ class ClickUpClient:
                 break
             page += 1
 
-        tasks = self._hydrate_missing_custom_fields(tasks)
+        tasks = self._hydrate_tasks_for_matching(tasks, sf_id_field_id)
 
         logger.info("Fetched %d total tasks from ClickUp list %s", len(tasks), self._list_id)
         return tasks
@@ -127,7 +128,8 @@ class ClickUpClient:
         return self._request("PUT", path, json=body)
 
     def _request(self, method: str, path: str, **kwargs) -> dict:
-        url = _BASE_URL + path
+        base_url = os.getenv("CLICKUP_BASE_URL", _DEFAULT_BASE_URL).rstrip("/")
+        url = base_url + path
         last_exc: Exception | None = None
 
         for attempt in range(1, _MAX_RETRIES + 1):
@@ -152,23 +154,43 @@ class ClickUpClient:
 
         raise last_exc or ClickUpAPIError(429, "Rate limit exceeded after retries")
 
-    def _hydrate_missing_custom_fields(self, tasks: list[dict]) -> list[dict]:
+    def _task_has_field_value(self, task: dict, field_id: str) -> bool:
+        """Return True when task has a non-empty value for the given custom field id."""
+        if not field_id:
+            return False
+        for cf in task.get("custom_fields", []):
+            if cf.get("id") == field_id:
+                value = cf.get("value")
+                return value is not None and str(value).strip() != ""
+        return False
+
+    def _hydrate_tasks_for_matching(self, tasks: list[dict], sf_id_field_id: str = "") -> list[dict]:
         """
         Some ClickUp list-task responses can omit the `custom_fields` key/value.
-        Matching relies on the Salesforce ID custom field, so hydrate tasks via
-        GET /task/{id} when needed.
+        Some responses also omit the Salesforce ID custom field even when
+        `custom_fields` exists. Matching relies on that field, so hydrate task
+        details via GET /task/{id} when needed.
         """
-        missing = [t for t in tasks if not isinstance(t.get("custom_fields"), list)]
-        if not missing:
+        needs_hydration: list[dict] = []
+        for task in tasks:
+            custom_fields = task.get("custom_fields")
+            if not isinstance(custom_fields, list):
+                needs_hydration.append(task)
+                continue
+
+            if sf_id_field_id and not self._task_has_field_value(task, sf_id_field_id):
+                needs_hydration.append(task)
+
+        if not needs_hydration:
             return tasks
 
         logger.warning(
-            "%d task(s) missing custom_fields in list response. Hydrating task details...",
-            len(missing),
+            "%d task(s) missing matching data in list response. Hydrating task details...",
+            len(needs_hydration),
         )
 
         hydrated_by_id: dict[str, dict] = {}
-        for task in missing:
+        for task in needs_hydration:
             task_id = task.get("id")
             if not task_id:
                 continue
