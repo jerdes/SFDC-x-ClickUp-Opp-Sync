@@ -124,16 +124,19 @@ class ClickUpClient:
         logger.debug("Created task id=%s name='%s'", task.get("id"), name)
         return task
 
-    def update_task(self, task_id: str, name: str, custom_fields: list[dict]) -> dict:
+    def update_task(self, task_id: str, name: str, custom_fields: list[dict]) -> None:
         """
-        Update a ClickUp task's name and/or a subset of its custom fields.
-        Pass only the fields that have changed; unchanged fields are omitted.
-        Returns the updated task dict.
+        Update a ClickUp task's name and each changed custom field.
+
+        The task name is updated via PUT /task/{id}.  Each custom field is set
+        via the dedicated POST /task/{id}/field/{field_id} endpoint, which is
+        the only reliable way to set dropdown (and other typed) fields — the
+        PUT body's custom_fields array silently ignores option UUIDs for dropdowns.
         """
-        body: dict = {"name": name, "custom_fields": custom_fields}
-        task = self._put(f"/task/{task_id}", body)
-        logger.debug("Updated task id=%s", task_id)
-        return task
+        self._put(f"/task/{task_id}", {"name": name})
+        for field in custom_fields:
+            self.set_custom_field(task_id, field["id"], field["value"])
+        logger.debug("Updated task id=%s (%d field(s))", task_id, len(custom_fields))
 
     def set_custom_field(self, task_id: str, field_id: str, value) -> None:
         """
