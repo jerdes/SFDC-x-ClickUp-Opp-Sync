@@ -163,7 +163,8 @@ class ClickUpClient:
         return self._request("PUT", path, json=body)
 
     def _request(self, method: str, path: str, **kwargs) -> dict:
-        base_url = os.getenv("CLICKUP_BASE_URL", _DEFAULT_BASE_URL).rstrip("/")
+        base_url = (os.getenv("CLICKUP_BASE_URL") or _DEFAULT_BASE_URL).rstrip("/")
+        logger.debug("ClickUp request: %s %s%s", method, base_url, path)
         url = base_url + path
         last_exc: Exception | None = None
 
