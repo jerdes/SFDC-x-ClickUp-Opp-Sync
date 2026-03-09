@@ -32,20 +32,15 @@ def get_custom_field_value(task: dict, field_id: str) -> str | None:
 
 def _to_timestamp_ms(date_str: str) -> int | None:
     """
-    Convert a date string to Unix timestamp in milliseconds (required by ClickUp date fields).
-    Handles formats Salesforce commonly exports: M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD.
+    Convert a DD/MM/YYYY date string to Unix timestamp in milliseconds (required by ClickUp).
     Returns None if parsing fails.
     """
-    formats = ("%m/%d/%Y", "%Y-%m-%d", "%m-%d-%Y", "%d/%m/%Y")
-    clean = date_str.strip()
-    for fmt in formats:
-        try:
-            dt = datetime.strptime(clean, fmt).replace(tzinfo=timezone.utc)
-            return int(dt.timestamp() * 1000)
-        except ValueError:
-            continue
-    logger.warning("Could not parse date '%s' — skipping field.", date_str)
-    return None
+    try:
+        dt = datetime.strptime(date_str.strip(), "%d/%m/%Y").replace(tzinfo=timezone.utc)
+        return int(dt.timestamp() * 1000)
+    except ValueError:
+        logger.warning("Could not parse date '%s' (expected DD/MM/YYYY) — skipping field.", date_str)
+        return None
 
 
 def _to_number(value_str: str) -> float | None:
