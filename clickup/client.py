@@ -46,7 +46,7 @@ class ClickUpClient:
         data = self._get(f"/list/{self._list_id}/field")
         return data.get("fields", [])
 
-    def get_all_tasks(self) -> list[dict]:
+    def get_all_tasks(self, sf_id_field_id: str = "") -> list[dict]:
         """
         Fetch every task in the list (including closed/archived) via pagination.
         Returns a flat list of task dicts.
