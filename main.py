@@ -76,7 +76,7 @@ def main() -> int:
         # Fetch dropdown option UUIDs from the live ClickUp workspace so we
         # always use the correct IDs regardless of environment (staging vs prod).
         list_fields = clickup_client.get_list_fields()
-        dropdown_maps = build_dropdown_maps_from_fields(list_fields, settings.clickup_field_ids)
+        dropdown_maps, text_canonicals = build_dropdown_maps_from_fields(list_fields, settings.clickup_field_ids)
 
         sf_id_field_id = settings.clickup_field_ids.get("sf_opportunity_id", "")
 
@@ -86,6 +86,7 @@ def main() -> int:
             sf_id_field_id=sf_id_field_id,
             field_ids=settings.clickup_field_ids,
             dropdown_maps=dropdown_maps,
+            text_canonicals=text_canonicals,
         )
 
         # 6. Log final summary

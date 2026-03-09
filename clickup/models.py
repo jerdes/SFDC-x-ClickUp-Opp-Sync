@@ -110,7 +110,7 @@ _DROPDOWN_UUID_MAPS: dict[str, dict[str, str]] = {
 def build_dropdown_maps_from_fields(
     list_fields: list[dict],
     field_ids: dict[str, str],
-) -> dict[str, dict[str, int]]:
+) -> tuple[dict[str, dict[str, int]], set[str]]:
     """
     Build csv_value → orderindex maps for dropdown fields by reading the
     actual options from the ClickUp list field definitions returned by
@@ -124,17 +124,18 @@ def build_dropdown_maps_from_fields(
         field_ids:   canonical_name → ClickUp field UUID mapping from settings.
 
     Returns:
-        Dict mapping canonical dropdown name → {csv_display_name_lower → orderindex}.
+        A 2-tuple of:
+          - Dict mapping canonical dropdown name → {csv_display_name_lower → orderindex}
+            for fields whose ClickUp type is actually a dropdown/labels field.
+          - Set of canonical names whose configured field has a plain-text type
+            (short_text, text) so the caller can write the value directly instead
+            of attempting a dropdown lookup.
     """
     # Field types that carry selectable options with orderindex
     _DROPDOWN_TYPES = {"drop_down", "dropdown", "labels"}
+    _TEXT_TYPES = {"short_text", "text", "url", "email"}
 
     _DROPDOWN_CANONICALS = set(_DROPDOWN_UUID_MAPS.keys())
-
-    # Log what field IDs are configured for dropdown canonicals
-    for canon in _DROPDOWN_CANONICALS:
-        fid = field_ids.get(canon)
-        logger.info("Dropdown config: canonical '%s' → field_id=%s", canon, fid or "(not set)")
 
     uuid_to_canonical: dict[str, str] = {
         field_ids[canon]: canon
@@ -142,25 +143,28 @@ def build_dropdown_maps_from_fields(
         if canon in field_ids
     }
 
-    # Log all fields returned by the API for diagnostic purposes
-    logger.info(
-        "ClickUp list has %d custom field(s): %s",
-        len(list_fields),
-        [(f.get("name"), f.get("type"), f.get("id")) for f in list_fields],
-    )
-
     result: dict[str, dict[str, int]] = {}
+    text_canonicals: set[str] = set()
+
     for field in list_fields:
         field_id = field.get("id")
         canonical = uuid_to_canonical.get(field_id)
         if not canonical:
             continue
         field_type = field.get("type", "")
+        if field_type in _TEXT_TYPES:
+            logger.info(
+                "Field '%s' (id=%s) mapped to canonical '%s' is type '%s' — "
+                "will write value as plain text.",
+                field.get("name"), field_id, canonical, field_type,
+            )
+            text_canonicals.add(canonical)
+            continue
         if field_type not in _DROPDOWN_TYPES:
             logger.warning(
-                "Field '%s' (id=%s) mapped to canonical '%s' has type '%s', "
-                "expected one of %s — skipping dropdown option extraction.",
-                field.get("name"), field_id, canonical, field_type, _DROPDOWN_TYPES,
+                "Field '%s' (id=%s) mapped to canonical '%s' has unrecognised type '%s' — "
+                "skipping.",
+                field.get("name"), field_id, canonical, field_type,
             )
             continue
         options = field.get("type_config", {}).get("options", [])
@@ -179,14 +183,14 @@ def build_dropdown_maps_from_fields(
         )
 
     for canon in _DROPDOWN_CANONICALS:
-        if canon not in result:
+        if canon not in result and canon not in text_canonicals:
             logger.warning(
                 "Dropdown '%s': could not load options from ClickUp API — "
                 "check that CLICKUP_FIELD_ID_%s is set and points to a dropdown field.",
                 canon, canon.upper(),
             )
 
-    return result
+    return result, text_canonicals
 
 
 def _is_valid_url(value: str) -> bool:
@@ -197,17 +201,23 @@ def build_custom_fields_payload(
     opportunity: "Opportunity",  # type: ignore[name-defined]  # forward ref
     field_ids: dict[str, str],
     dropdown_maps: dict[str, dict[str, str]] | None = None,
+    text_canonicals: set[str] | None = None,
 ) -> list[dict]:
     """
     Build the custom_fields array for a ClickUp create/update request body.
 
     Only includes fields that have a configured field ID and a non-empty value.
-    Dropdown fields (stage, forecast_category) are converted to option UUIDs
-    via the hardcoded _DROPDOWN_UUID_MAPS lookup.
+    Dropdown fields (stage, forecast_category) are converted to option orderindexes
+    via the dynamically-fetched maps, or written as plain text if the configured
+    ClickUp field is actually a short_text/text type.
 
     Args:
         opportunity: An Opportunity instance from sync/parser.py.
         field_ids: Maps canonical field name -> ClickUp custom field UUID.
+        dropdown_maps: Optional canonical → {csv_value_lower → orderindex} maps
+            built from the live ClickUp list fields.
+        text_canonicals: Set of canonical names whose configured ClickUp field is
+            a plain-text type; values are written directly instead of as orderindexes.
 
     Returns:
         List of {"id": "<uuid>", "value": <value>} dicts.
@@ -288,32 +298,29 @@ def build_custom_fields_payload(
                     )
 
         elif canonical in _DROPDOWN_UUID_MAPS:
-            # Dropdown field — ClickUp's POST /task/{id}/field/{field_id}
-            # endpoint expects the orderindex (integer), not the option UUID.
-            # Use the dynamically-fetched maps (name → orderindex) when available.
             if value:
-                csv_key = value.strip().lower()
-                if dropdown_maps is not None and canonical in dropdown_maps:
-                    orderindex = dropdown_maps[canonical].get(csv_key)
-                    if orderindex is not None:
-                        payload.append({"id": field_id, "value": orderindex})
-                    else:
-                        logger.warning(
-                            "No ClickUp option for %s value '%s' — skipping. "
-                            "Known values: %s",
-                            canonical, value, list(dropdown_maps[canonical].keys()),
-                        )
+                # If the configured ClickUp field is plain text, write directly.
+                if text_canonicals and canonical in text_canonicals:
+                    payload.append({"id": field_id, "value": value.strip()})
                 else:
-                    # No dynamic maps available — fall back to hardcoded UUID map
-                    uuid_map = _DROPDOWN_UUID_MAPS[canonical]
-                    option_uuid = uuid_map.get(csv_key)
-                    if option_uuid is not None:
-                        payload.append({"id": field_id, "value": option_uuid})
+                    # Dropdown field — expects orderindex (integer).
+                    csv_key = value.strip().lower()
+                    if dropdown_maps is not None and canonical in dropdown_maps:
+                        orderindex = dropdown_maps[canonical].get(csv_key)
+                        if orderindex is not None:
+                            payload.append({"id": field_id, "value": orderindex})
+                        else:
+                            logger.warning(
+                                "No ClickUp option for %s value '%s' — skipping. "
+                                "Known values: %s",
+                                canonical, value, list(dropdown_maps[canonical].keys()),
+                            )
                     else:
+                        # No dynamic maps and not text — skip with a warning
                         logger.warning(
-                            "No ClickUp option UUID for %s value '%s' — skipping. "
-                            "Known values: %s",
-                            canonical, value, list(uuid_map.keys()),
+                            "No dropdown map available for '%s' (value='%s') and field "
+                            "is not plain text — skipping.",
+                            canonical, value,
                         )
 
         else:
@@ -358,6 +365,7 @@ def get_changed_fields_payload(
     existing_task: dict,
     field_ids: dict[str, str],
     dropdown_maps: dict[str, dict[str, str]] | None = None,
+    text_canonicals: set[str] | None = None,
 ) -> list[dict]:
     """
     Return a custom_fields payload containing only fields whose target value
@@ -367,12 +375,15 @@ def get_changed_fields_payload(
         opportunity: Parsed Opportunity with CSV values.
         existing_task: The full task dict returned by the ClickUp API.
         field_ids: Maps canonical field name -> ClickUp custom field UUID.
+        dropdown_maps: Optional canonical → {csv_value_lower → orderindex} maps.
+        text_canonicals: Set of canonical names whose configured ClickUp field is
+            a plain-text type.
 
     Returns:
         Subset of build_custom_fields_payload(opportunity, field_ids) containing
         only entries where the value has changed.
     """
-    target_payload = build_custom_fields_payload(opportunity, field_ids, dropdown_maps)
+    target_payload = build_custom_fields_payload(opportunity, field_ids, dropdown_maps, text_canonicals)
 
     # Index current ClickUp field values by field UUID
     current_by_id: dict[str, object] = {
