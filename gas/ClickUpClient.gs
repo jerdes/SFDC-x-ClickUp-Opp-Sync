@@ -143,7 +143,14 @@ function makeClickUpClient(apiToken, listId, baseUrl) {
     updateTask(taskId, name, customFields) {
       _request('PUT', '/task/' + taskId, { name: name });
       for (const field of customFields) {
-        client.setCustomField(taskId, field.id, field.value);
+        try {
+          client.setCustomField(taskId, field.id, field.value);
+        } catch (e) {
+          Logger.log(
+            'WARNING: Could not update field %s on task %s (value=%s): %s',
+            field.id, taskId, JSON.stringify(field.value), e.message
+          );
+        }
       }
       Logger.log('Updated task id=%s (%d field(s))', taskId, customFields.length);
     },
