@@ -158,6 +158,7 @@ function makeClickUpClient(apiToken, listId, baseUrl) {
     /** Set a single custom field value via the dedicated endpoint. */
     setCustomField(taskId, fieldId, value) {
       _request('POST', '/task/' + taskId + '/field/' + fieldId, { value: value });
+      Utilities.sleep(150);
       Logger.log('Set field %s on task %s', fieldId, taskId);
     },
 
