@@ -306,10 +306,19 @@ function _valuesEqual(target, current) {
 
   if (current === null || current === undefined || current === '') return false;
 
-  // Date (int ms) or number (float) — compare numerically with tolerance < 1
+  // Date (int ms) or number (float) — compare numerically
   if (typeof target === 'number') {
     const c = parseFloat(current);
-    return !isNaN(c) && Math.abs(target - c) < 1;
+    if (isNaN(c)) return false;
+    // Date timestamps are large ms-since-epoch values. ClickUp stores dates as midnight
+    // in the workspace timezone, so the stored ms can differ from our midnight-UTC value
+    // by several hours. Compare at day granularity (round to nearest day) to absorb the
+    // timezone offset. Regular numbers (currency etc.) are small enough that rounding
+    // to the nearest day would be wrong, so use tolerance < 1 for those instead.
+    if (target > 1e11) {
+      return Math.round(target / 86400000) === Math.round(c / 86400000);
+    }
+    return Math.abs(target - c) < 1;
   }
 
   // Text / url — plain string comparison
@@ -329,17 +338,5 @@ function getChangedFieldsPayload(opp, existingTask, fieldIds, dropdownMaps, text
     currentById[cf.id] = (cf.value !== undefined) ? cf.value : null;
   }
 
-  return targetPayload.filter(item => {
-    const current = currentById[item.id];
-    const changed = !_valuesEqual(item.value, current);
-    if (changed) {
-      Logger.log(
-        'FIELD_DIFF id=%s  target=%s (%s)  current=%s (%s)',
-        item.id,
-        JSON.stringify(item.value), typeof item.value,
-        JSON.stringify(current), typeof current
-      );
-    }
-    return changed;
-  });
+  return targetPayload.filter(item => !_valuesEqual(item.value, currentById[item.id]));
 }
