@@ -329,5 +329,17 @@ function getChangedFieldsPayload(opp, existingTask, fieldIds, dropdownMaps, text
     currentById[cf.id] = (cf.value !== undefined) ? cf.value : null;
   }
 
-  return targetPayload.filter(item => !_valuesEqual(item.value, currentById[item.id]));
+  return targetPayload.filter(item => {
+    const current = currentById[item.id];
+    const changed = !_valuesEqual(item.value, current);
+    if (changed) {
+      Logger.log(
+        'FIELD_DIFF id=%s  target=%s (%s)  current=%s (%s)',
+        item.id,
+        JSON.stringify(item.value), typeof item.value,
+        JSON.stringify(current), typeof current
+      );
+    }
+    return changed;
+  });
 }
