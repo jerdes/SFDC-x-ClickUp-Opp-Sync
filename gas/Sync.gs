@@ -254,7 +254,7 @@ function executeSyncEngine(opportunities, client, sfIdFieldId, fieldIds, dropdow
     const taskId = task.id;
     try {
       // Skip tasks already closed in ClickUp — don't re-open or overwrite closed state
-      if (task.status && task.status.type === 'closed') {
+      if (task.status && (task.status.type === 'closed' || task.status.type === 'done')) {
         summary.skipped++;
         Logger.log(
           'SKIPPED  "%s" (SF id=%s, CU id=%s) — already closed in ClickUp (status="%s")',
@@ -298,7 +298,7 @@ function executeSyncEngine(opportunities, client, sfIdFieldId, fieldIds, dropdow
     const taskName = task.name || taskId;
     try {
       // Skip if already closed — avoids redundant API calls on every run
-      if (task.status && task.status.type === 'closed') {
+      if (task.status && (task.status.type === 'closed' || task.status.type === 'done')) {
         Logger.log('ALREADY CLOSED  "%s" (CU id=%s) — skipping', taskName, taskId);
         continue;
       }
