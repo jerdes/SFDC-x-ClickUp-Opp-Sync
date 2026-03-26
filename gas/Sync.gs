@@ -253,6 +253,16 @@ function executeSyncEngine(opportunities, client, sfIdFieldId, fieldIds, dropdow
   for (const [opp, task] of toUpdate) {
     const taskId = task.id;
     try {
+      // Skip tasks already closed in ClickUp — don't re-open or overwrite closed state
+      if (task.status && task.status.type === 'closed') {
+        summary.skipped++;
+        Logger.log(
+          'SKIPPED  "%s" (SF id=%s, CU id=%s) — already closed in ClickUp (status="%s")',
+          opp.name, opp.sf_opportunity_id, taskId, task.status.status
+        );
+        continue;
+      }
+
       const changedFields = getChangedFieldsPayload(opp, task, fieldIds, dropdownMaps, textCanonicals);
       const nameChanged = opp.name !== (task.name || '');
 
@@ -287,6 +297,11 @@ function executeSyncEngine(opportunities, client, sfIdFieldId, fieldIds, dropdow
     const taskId = task.id;
     const taskName = task.name || taskId;
     try {
+      // Skip if already closed — avoids redundant API calls on every run
+      if (task.status && task.status.type === 'closed') {
+        Logger.log('ALREADY CLOSED  "%s" (CU id=%s) — skipping', taskName, taskId);
+        continue;
+      }
       client.closeOrphanTask(taskId, CLOSED_STATUS);
       summary.closed++;
       Logger.log('CLOSED   "%s" (CU id=%s) — SF ID not in CSV', taskName, taskId);
