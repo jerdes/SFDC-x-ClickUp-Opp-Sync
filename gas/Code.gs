@@ -7,11 +7,7 @@
 // 1. Go to script.google.com and create a new project named e.g. "SFDC-ClickUp Sync".
 //    (Or push these files with clasp: https://github.com/google/clasp)
 //
-// 2. Set the project timezone:
-//      Project Settings (⚙) → Time zone → Australia/Sydney
-//    This is required for the 9:03 AM Sydney trigger to fire at the right time.
-//
-// 3. Add Script Properties (Project Settings → Script Properties → Add):
+// 2. Add Script Properties (Project Settings → Script Properties → Add):
 //
 //      REQUIRED:
 //        CLICKUP_API_TOKEN                  — your ClickUp API token
@@ -25,32 +21,35 @@
 //        CLICKUP_FIELD_ID_<SUFFIX>          — one per field (see Config.gs for the full list)
 //        CSV_MAP_<CANONICAL_UPPER>          — override default CSV column headers
 //
-// 4. Authorise the script:
+// 3. Authorise the script:
 //      Run runSync() once manually → Google will prompt for Gmail + network permissions.
 //
-// 5. Install the daily trigger:
-//      Run setupDailyTrigger() once. This schedules runSync() at 9:03 AM Sydney time
-//      every day using a self-rescheduling one-time trigger (the only GAS mechanism
-//      that guarantees a specific minute, not just a specific hour).
+// 4. Install the polling trigger:
+//      Run setupPollingTrigger() once. This schedules runSyncIfNewReport() to fire
+//      every 5 minutes. The sync only actually runs when a new report email arrives —
+//      if no new report is found the execution exits immediately.
 //
 // ════════════════════════════════════════════════════════════════════════════
-// DAILY OPERATIONS
+// OPERATIONS
 // ════════════════════════════════════════════════════════════════════════════
 //
-// - The trigger fires automatically at 9:03 AM Sydney time and reschedules itself.
+// - runSyncIfNewReport() fires every 5 minutes and processes a new report the moment
+//   it lands in the inbox (within ~5 minutes). Works for any report frequency.
 // - To run manually: open the script editor → select runSync → ▶ Run.
+//   runSync() always processes the latest report regardless of whether it was
+//   already processed (useful for testing / re-running).
 // - Execution logs: View → Logs (or Executions in the left sidebar).
 //
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Main entry point. Runs the full Salesforce → ClickUp sync.
- * Safe to run manually at any time.
+ * Manual entry point. Runs the full Salesforce → ClickUp sync against the
+ * latest report email, regardless of whether it was already processed.
+ * Use this for testing or ad-hoc re-runs from the script editor.
  */
 function runSync() {
-  Logger.log('=== Salesforce → ClickUp sync starting ===');
+  Logger.log('=== Salesforce → ClickUp sync starting (manual) ===');
 
-  // 1. Load settings from Script Properties
   let settings;
   try {
     settings = loadSettings();
@@ -59,7 +58,6 @@ function runSync() {
     throw e;
   }
 
-  // 2. Fetch the latest CSV attachment from Gmail
   Logger.log(
     'Connecting to Gmail as script owner, searching for subject="%s"...',
     settings.gmailSubjectPattern
@@ -69,7 +67,18 @@ function runSync() {
     settings.gmailAttachmentNamePattern
   );
 
-  // 3. Parse the CSV
+  _runSyncWithCsv(csvText, settings);
+}
+
+/**
+ * Core sync logic shared by runSync() and runSyncIfNewReport().
+ * Parses the CSV, initialises the ClickUp client, and runs the sync engine.
+ *
+ * @param {string} csvText   Raw CSV text from the Gmail attachment.
+ * @param {object} settings  Loaded settings object from loadSettings().
+ */
+function _runSyncWithCsv(csvText, settings) {
+  // 1. Parse the CSV
   Logger.log('Parsing CSV...');
   const opportunities = parseCsv(csvText, settings.csvFieldMap);
 
@@ -78,7 +87,7 @@ function runSync() {
     return;
   }
 
-  // 4. Initialise the ClickUp client and validate the token
+  // 2. Initialise the ClickUp client and validate the token
   const token = settings.clickupApiToken;
   Logger.log('ClickUp token: length=%d, prefix="%s…"', token.length, token.slice(0, 4));
   Logger.log('ClickUp base URL: %s', settings.clickupBaseUrl);
@@ -90,7 +99,7 @@ function runSync() {
   );
   client.validateToken();
 
-  // 5. Fetch live dropdown option maps from the ClickUp workspace
+  // 3. Fetch live dropdown option maps from the ClickUp workspace
   const listFields = client.getListFields();
   const { dropdownMaps, textCanonicals } = buildDropdownMapsFromFields(
     listFields,
@@ -99,7 +108,7 @@ function runSync() {
 
   const sfIdFieldId = settings.clickupFieldIds['sf_opportunity_id'] || '';
 
-  // 6. Run the sync
+  // 4. Run the sync
   const summary = executeSyncEngine(
     opportunities,
     client,
@@ -109,7 +118,7 @@ function runSync() {
     textCanonicals
   );
 
-  // 7. Log final summary
+  // 5. Log final summary
   Logger.log(
     '=== Sync finished: created=%d updated=%d closed=%d skipped=%d errors=%d ===',
     summary.created, summary.updated, summary.closed, summary.skipped, summary.errors.length
@@ -126,63 +135,68 @@ function runSync() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Event-driven entry point (called by the polling trigger)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Polling entry point — fires every 5 minutes via the trigger installed by
+ * setupPollingTrigger(). Exits immediately if no new report email has arrived
+ * since the last successful sync. Processes the report and records its
+ * message ID in Script Properties so it is never processed twice.
+ */
+function runSyncIfNewReport() {
+  const props = PropertiesService.getScriptProperties();
+  const lastProcessedId = props.getProperty('LAST_PROCESSED_EMAIL_ID') || '';
+
+  let settings;
+  try {
+    settings = loadSettings();
+  } catch (e) {
+    Logger.log('FATAL: Configuration error: ' + e.message);
+    throw e;
+  }
+
+  const result = fetchLatestCsvIfNew(
+    settings.gmailSubjectPattern,
+    settings.gmailAttachmentNamePattern,
+    lastProcessedId
+  );
+
+  if (!result) {
+    // No new report — nothing to do.
+    return;
+  }
+
+  Logger.log('=== New report detected (message id=%s) — starting sync ===', result.messageId);
+  _runSyncWithCsv(result.csvText, settings);
+
+  // Mark this email as processed so subsequent polls skip it.
+  props.setProperty('LAST_PROCESSED_EMAIL_ID', result.messageId);
+  Logger.log('Recorded LAST_PROCESSED_EMAIL_ID=%s', result.messageId);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Trigger management
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Install the daily 9:03 AM Sydney trigger.
+ * Install the every-5-minutes polling trigger.
  * Run this ONCE from the script editor after initial setup.
- * It uses a self-rescheduling one-time trigger — the only GAS mechanism
- * that guarantees a specific minute (atHour-only triggers fire at a random
- * minute within the hour).
+ * runSyncIfNewReport() will fire every 5 minutes but exits immediately
+ * when no new report is waiting — it only syncs when a fresh email arrives.
  */
-function setupDailyTrigger() {
+function setupPollingTrigger() {
   _deleteExistingTriggers();
-  _scheduleNextRun();
-  Logger.log('Daily trigger installed. Check Triggers (⏱) in the left sidebar to confirm.');
-}
-
-/**
- * Wrapper called by the trigger. Runs the sync then reschedules for tomorrow.
- * Do NOT rename this function — the trigger is registered against this name.
- */
-function _runSyncAndReschedule() {
-  // Delete the one-time trigger that just fired (GAS does not auto-delete them)
-  _deleteExistingTriggers();
-
-  try {
-    runSync();
-  } finally {
-    // Always reschedule, even if today's sync threw an error
-    _scheduleNextRun();
-  }
-}
-
-/**
- * Schedule a one-time trigger for 9:03 AM Sydney time on the next calendar day
- * (or today, if it's currently before 9:03 AM).
- *
- * setHours() uses the project timezone (Australia/Sydney), so DST transitions
- * are handled automatically by GAS — no manual UTC arithmetic needed.
- */
-function _scheduleNextRun() {
-  const now = new Date();
-
-  const target = new Date(now);
-  target.setHours(9, 3, 0, 0);   // 09:03:00.000 in project timezone (Australia/Sydney)
-
-  // If that time has already passed today, push to tomorrow
-  if (target <= now) {
-    target.setDate(target.getDate() + 1);
-  }
-
-  ScriptApp.newTrigger('_runSyncAndReschedule').timeBased().at(target).create();
-  Logger.log('Next sync scheduled for: ' + target.toString());
+  ScriptApp.newTrigger('runSyncIfNewReport')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+  Logger.log('Polling trigger installed (every 5 min). Check Triggers (⏱) in the left sidebar.');
 }
 
 /** Remove all existing triggers for the sync functions. */
 function _deleteExistingTriggers() {
-  const TRIGGER_FUNCTIONS = new Set(['_runSyncAndReschedule']);
+  const TRIGGER_FUNCTIONS = new Set(['runSyncIfNewReport', '_runSyncAndReschedule']);
   for (const trigger of ScriptApp.getProjectTriggers()) {
     if (TRIGGER_FUNCTIONS.has(trigger.getHandlerFunction())) {
       ScriptApp.deleteTrigger(trigger);
