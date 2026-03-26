@@ -1,13 +1,8 @@
 name: Salesforce → ClickUp Sync
 
 on:
-  # Runs weekdays at 9:03 AM Sydney time (AEDT UTC+11 / AEST UTC+10).
-  # 10:03 PM UTC Sun–Thu = 9:03 AM Mon–Fri AEDT (DST); 11:03 AM AEST (winter).
-  # Use https://crontab.guru to adjust if needed.
-  schedule:
-    - cron: "3 22 * * 0-4"
-
-  # Lets you trigger a manual run from the Actions tab at any time
+  # Scheduled run disabled — sync is now handled by Google Apps Script.
+  # Kept here for manual fallback runs from the Actions tab if needed.
   workflow_dispatch:
 
 jobs:
