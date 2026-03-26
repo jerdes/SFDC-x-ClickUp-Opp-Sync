@@ -297,13 +297,14 @@ function buildCustomFieldsPayload(opp, fieldIds, dropdownMaps, textCanonicals) {
  * Returns true when they represent identical data. Equivalent to _values_equal().
  */
 function _valuesEqual(target, current) {
-  if (current === null || current === undefined || current === '') return false;
-
-  // Checkbox: boolean target, ClickUp may return bool, 0/1, or "true"/"false"
+  // Checkbox: ClickUp returns null for unchecked, which equals false — check before the null guard
   if (typeof target === 'boolean') {
+    if (current === null || current === undefined) return target === false;
     if (typeof current === 'boolean') return target === current;
     return target === (['true', '1', 'yes'].includes(String(current).toLowerCase()));
   }
+
+  if (current === null || current === undefined || current === '') return false;
 
   // Date (int ms) or number (float) — compare numerically with tolerance < 1
   if (typeof target === 'number') {
