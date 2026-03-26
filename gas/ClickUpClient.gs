@@ -129,11 +129,8 @@ function makeClickUpClient(apiToken, listId, baseUrl) {
     },
 
     /** Create a new ClickUp task. Returns the created task dict. */
-    createTask(name, customFields) {
-      const task = _request('POST', '/list/' + listId + '/task', {
-        name: name,
-        custom_fields: customFields,
-      });
+    createTask(name) {
+      const task = _request('POST', '/list/' + listId + '/task', { name: name });
       Logger.log('Created task id=%s name="%s"', task.id, name);
       return task;
     },
