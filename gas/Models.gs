@@ -33,9 +33,12 @@ const _STAGE_CSV_TO_CLICKUP = {
 };
 
 const _FORECAST_CATEGORY_CSV_TO_CLICKUP = {
-  'best case': 'best case',
-  'likely':    'likely',
-  'commit':    'commit',
+  'best case':  'best case',
+  'likely':     'likely',
+  'commit':     'commit',
+  'closed lost': 'closed lost',
+  'closed won':  'closed won',
+  'omitted':    'omitted',
 };
 
 const _DROPDOWN_CSV_MAPS = {
