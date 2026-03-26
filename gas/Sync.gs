@@ -220,14 +220,22 @@ function executeSyncEngine(opportunities, client, sfIdFieldId, fieldIds, dropdow
       const customFields = buildCustomFieldsPayload(opp, fieldIds, dropdownMaps, textCanonicals);
       const task = client.createTask(opp.name);
 
-      // Set every custom field via the dedicated endpoint rather than the create body.
-      // The staging API (and sometimes production) rejects creates that include unknown
-      // field IDs in custom_fields, so we set them individually after creation instead.
+      // Set non-critical fields individually. A bad field ID (e.g. wrong staging UUID)
+      // logs a warning but does not abort the create — the task still lands in ClickUp.
       for (const field of customFields) {
-        client.setCustomField(task.id, field.id, field.value);
+        if (field.id === sfIdFieldId) continue; // handled explicitly below
+        try {
+          client.setCustomField(task.id, field.id, field.value);
+        } catch (e) {
+          Logger.log(
+            'WARNING: Could not set field %s on new task %s: %s',
+            field.id, task.id, e.message
+          );
+        }
       }
 
-      // Always set the SF Opportunity ID explicitly — it is critical for future matching.
+      // SF Opportunity ID must succeed — without it the task can't be matched on
+      // future runs and will be treated as a new create, producing duplicates.
       if (sfIdFieldId) {
         client.setCustomField(task.id, sfIdFieldId, opp.sf_opportunity_id);
       }
