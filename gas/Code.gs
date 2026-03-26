@@ -189,9 +189,9 @@ function setupPollingTrigger() {
   _deleteExistingTriggers();
   ScriptApp.newTrigger('runSyncIfNewReport')
     .timeBased()
-    .everyMinutes(5)
+    .everyMinutes(15)
     .create();
-  Logger.log('Polling trigger installed (every 5 min). Check Triggers (⏱) in the left sidebar.');
+  Logger.log('Polling trigger installed (every 15 min). Check Triggers (⏱) in the left sidebar.');
 }
 
 /** Remove all existing triggers for the sync functions. */
