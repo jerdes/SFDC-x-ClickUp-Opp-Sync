@@ -226,9 +226,7 @@ function buildCustomFieldsPayload(opp, fieldIds, dropdownMaps, textCanonicals) {
 
     if (_CHECKBOX_FIELDS.has(canonical)) {
       if (!(value || '').trim()) continue;
-      const boolValue = value.trim() === '1';
-      Logger.log('CHECKBOX_CSV field=%s csv_value="%s" → bool=%s', canonical, value, boolValue);
-      payload.push({ id: fieldId, value: boolValue });
+      payload.push({ id: fieldId, value: value.trim() === '1' });
 
     } else if (_DATE_FIELDS.has(canonical)) {
       if (value) {
@@ -341,25 +339,6 @@ function getChangedFieldsPayload(opp, existingTask, fieldIds, dropdownMaps, text
   const currentById = {};
   for (const cf of (existingTask.custom_fields || [])) {
     currentById[cf.id] = (cf.value !== undefined) ? cf.value : null;
-  }
-
-  // DEBUG: log checkbox field values to diagnose repeated-unchecking issue.
-  // Remove this block once the root cause is confirmed.
-  const checkboxFieldIds = new Set(
-    [..._CHECKBOX_FIELDS].map(canon => fieldIds[canon]).filter(Boolean)
-  );
-  for (const item of targetPayload) {
-    if (checkboxFieldIds.has(item.id)) {
-      const current = currentById[item.id];
-      const equal = _valuesEqual(item.value, current);
-      Logger.log(
-        'CHECKBOX_DEBUG task=%s field=%s target=%s (type=%s) current=%s (type=%s) equal=%s',
-        existingTask.id, item.id,
-        JSON.stringify(item.value), typeof item.value,
-        JSON.stringify(current), typeof current,
-        equal
-      );
-    }
   }
 
   return targetPayload.filter(item => !_valuesEqual(item.value, currentById[item.id]));
