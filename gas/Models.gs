@@ -95,7 +95,11 @@ function _extractUrlFromHtml(value) {
 }
 
 function _isValidUrl(value) {
-  return value.startsWith('http://') || value.startsWith('https://');
+  if (!value) return false;
+  if (!value.startsWith('http://') && !value.startsWith('https://')) return false;
+  // Require a meaningful hostname (rejects http://-, http://., http://16/..., etc.)
+  const hostname = value.replace(/^https?:\/\//, '').split(/[/?#]/)[0];
+  return hostname.length >= 3 && /[a-zA-Z0-9]/.test(hostname);
 }
 
 // ----------------------------------------------------------------
