@@ -83,6 +83,17 @@ function _toNumber(valueStr) {
   return n;
 }
 
+/**
+ * If value is a Salesforce HTML hyperlink (<a href="javascript:...">url</a>),
+ * extract the plain URL from the link text. Otherwise return value unchanged.
+ * The Data Connector for Salesforce wraps URL fields in anchor tags.
+ */
+function _extractUrlFromHtml(value) {
+  if (!value || !value.includes('<a ')) return value;
+  const match = value.match(/>([^<]+)<\/a>/);
+  return match ? match[1].trim() : value;
+}
+
 function _isValidUrl(value) {
   return value.startsWith('http://') || value.startsWith('https://');
 }
@@ -243,12 +254,13 @@ function buildCustomFieldsPayload(opp, fieldIds, dropdownMaps, textCanonicals) {
 
     } else if (_URL_FIELDS.has(canonical)) {
       if (value) {
-        if (_isValidUrl(value)) {
-          payload.push({ id: fieldId, value: value });
+        const url = _extractUrlFromHtml(value);
+        if (_isValidUrl(url)) {
+          payload.push({ id: fieldId, value: url });
         } else {
           Logger.log(
             'Skipping "%s" for field "%s" — not a valid URL (must start with http/https).',
-            value, canonical
+            url, canonical
           );
         }
       }
