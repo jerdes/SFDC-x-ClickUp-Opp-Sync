@@ -226,7 +226,8 @@ function buildCustomFieldsPayload(opp, fieldIds, dropdownMaps, textCanonicals) {
 
     if (_CHECKBOX_FIELDS.has(canonical)) {
       if (!(value || '').trim()) continue;
-      payload.push({ id: fieldId, value: value.trim() === '1' });
+      const v = value.trim().toLowerCase();
+      payload.push({ id: fieldId, value: v === '1' || v === 'true' });
 
     } else if (_DATE_FIELDS.has(canonical)) {
       if (value) {

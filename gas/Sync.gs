@@ -1,54 +1,46 @@
-// Sync.gs — CSV parser, opportunity matcher, and sync engine.
+// Sync.gs — CSV / Sheet parser, opportunity matcher, and sync engine.
 //
 // Replaces sync/parser.py, sync/matcher.py, and sync/engine.py.
 
 // ----------------------------------------------------------------
-// CSV Parser
+// CSV / Sheet Parser
 // ----------------------------------------------------------------
 
 /**
- * Parse raw CSV text into a list of opportunity objects.
- * Uses Utilities.parseCsv() (GAS built-in) instead of Python's csv.DictReader.
+ * Internal: map an array of rows (already split) against a fieldMap and return
+ * an opportunities array. Shared by parseCsv() and parseSheetData().
  *
- * @param {string} csvText   Raw CSV text (UTF-8, BOM stripped automatically).
- * @param {Object} fieldMap  canonical → CSV column header mapping from settings.
+ * @param {string[]}   headers  First row — column headers.
+ * @param {string[][]} rows     Data rows (header row excluded).
+ * @param {Object}     fieldMap canonical → column header mapping from settings.
  * @returns {Array} List of opportunity objects.
  */
-function parseCsv(csvText, fieldMap) {
-  // Invert the map: CSV header → canonical name
+function _parseRows(headers, rows, fieldMap) {
+  // Invert the map: column header → canonical name
   const headerToCanonical = {};
   for (const [canonical, header] of Object.entries(fieldMap)) {
     headerToCanonical[header] = canonical;
   }
 
-  // Strip BOM if present
-  const text = csvText.replace(/^\uFEFF/, '');
-  const rows = Utilities.parseCsv(text);
-
-  if (!rows || rows.length < 2) {
-    throw new Error('CSV appears to be empty — no data rows found.');
-  }
-
-  const headers = rows[0];
-  const csvHeaders = new Set(headers);
+  const colHeaders = new Set(headers);
 
   // Validate the SF Opportunity ID column is present — without it nothing can match
   const sfIdHeader = fieldMap['sf_opportunity_id'];
-  if (!csvHeaders.has(sfIdHeader)) {
+  if (!colHeaders.has(sfIdHeader)) {
     throw new Error(
-      'CRITICAL: The Opportunity ID column "' + sfIdHeader + '" was not found in the CSV. ' +
+      'CRITICAL: The Opportunity ID column "' + sfIdHeader + '" was not found. ' +
       'Every row will be skipped without it. ' +
-      'Either add this column to your Salesforce report or set ' +
+      'Either add this column to your data source or set ' +
       'CSV_MAP_SF_OPPORTUNITY_ID in Script Properties. ' +
-      'Columns actually in this CSV: ' + JSON.stringify(headers)
+      'Columns actually present: ' + JSON.stringify(headers)
     );
   }
 
-  // Warn about any other mapped columns not present in this CSV
+  // Warn about any other mapped columns not present in this data
   for (const [canonical, header] of Object.entries(fieldMap)) {
-    if (canonical !== 'sf_opportunity_id' && !csvHeaders.has(header)) {
+    if (canonical !== 'sf_opportunity_id' && !colHeaders.has(header)) {
       Logger.log(
-        'WARNING: Expected CSV column "%s" (mapped from "%s") not found in file — ' +
+        'WARNING: Expected column "%s" (mapped from "%s") not found — ' +
         'it will be left blank. Check CSV_MAP_%s in Script Properties.',
         header, canonical, canonical.toUpperCase()
       );
@@ -58,7 +50,7 @@ function parseCsv(csvText, fieldMap) {
   const opportunities = [];
   let skipped = 0;
 
-  for (let i = 1; i < rows.length; i++) {
+  for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     // Skip blank rows
     if (row.length === 0 || (row.length === 1 && row[0] === '')) continue;
@@ -114,8 +106,37 @@ function parseCsv(csvText, fieldMap) {
     });
   }
 
-  Logger.log('CSV parsed: %d opportunities loaded, %d rows skipped.', opportunities.length, skipped);
+  Logger.log('Parsed: %d opportunities loaded, %d rows skipped.', opportunities.length, skipped);
   return opportunities;
+}
+
+/**
+ * Parse raw CSV text into a list of opportunity objects.
+ * Uses Utilities.parseCsv() (GAS built-in) instead of Python's csv.DictReader.
+ *
+ * @param {string} csvText   Raw CSV text (UTF-8, BOM stripped automatically).
+ * @param {Object} fieldMap  canonical → CSV column header mapping from settings.
+ * @returns {Array} List of opportunity objects.
+ */
+function parseCsv(csvText, fieldMap) {
+  const text = csvText.replace(/^﻿/, '');
+  const rows = Utilities.parseCsv(text);
+  if (!rows || rows.length < 2) {
+    throw new Error('CSV appears to be empty — no data rows found.');
+  }
+  return _parseRows(rows[0], rows.slice(1), fieldMap);
+}
+
+/**
+ * Parse Google Sheet data (from readOpportunitiesFromSheet) into a list of
+ * opportunity objects using the same logic as parseCsv.
+ *
+ * @param {{ headers: string[], rows: string[][] }} sheetData  Output of readOpportunitiesFromSheet().
+ * @param {Object} fieldMap  canonical → column header mapping from settings.
+ * @returns {Array} List of opportunity objects.
+ */
+function parseSheetData(sheetData, fieldMap) {
+  return _parseRows(sheetData.headers, sheetData.rows, fieldMap);
 }
 
 // ----------------------------------------------------------------
