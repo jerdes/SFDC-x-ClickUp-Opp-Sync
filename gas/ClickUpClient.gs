@@ -54,7 +54,8 @@ function makeClickUpClient(apiToken, listId, baseUrl) {
         throw new Error('ClickUp API error ' + code + ': ' + resp.getContentText());
       }
 
-      return JSON.parse(resp.getContentText());
+      const text = resp.getContentText();
+      return text ? JSON.parse(text) : null;
     }
 
     throw lastError || new Error('ClickUp rate limit exceeded after retries');
