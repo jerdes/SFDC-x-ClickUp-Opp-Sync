@@ -162,11 +162,10 @@ function makeClickUpClient(apiToken, listId, baseUrl) {
       Logger.log('Set field %s on task %s', fieldId, taskId);
     },
 
-    /** Mark a task as closed (used for SF orphans). */
-    closeOrphanTask(taskId, closedStatus) {
-      const task = _request('PUT', '/task/' + taskId, { status: closedStatus });
-      Logger.log('Closed orphan task id=%s (status="%s")', taskId, closedStatus);
-      return task;
+    /** Permanently delete a task (used for SF orphans — reassigned opportunities). */
+    deleteTask(taskId) {
+      _request('DELETE', '/task/' + taskId);
+      Logger.log('Deleted orphan task id=%s', taskId);
     },
   };
 

@@ -228,7 +228,6 @@ function matchOpportunities(opportunities, clickupTasks, sfIdFieldId) {
  * @returns {{ created, updated, closed, skipped, errors }}
  */
 function executeSyncEngine(opportunities, client, sfIdFieldId, fieldIds, dropdownMaps, textCanonicals) {
-  const CLOSED_STATUS = 'DONE';
   const summary = { created: 0, updated: 0, closed: 0, skipped: 0, errors: [] };
 
   Logger.log('Fetching all ClickUp tasks...');
@@ -318,14 +317,9 @@ function executeSyncEngine(opportunities, client, sfIdFieldId, fieldIds, dropdow
     const taskId = task.id;
     const taskName = task.name || taskId;
     try {
-      // Skip if already closed — avoids redundant API calls on every run
-      if (task.status && (task.status.type === 'closed' || task.status.type === 'done')) {
-        Logger.log('ALREADY CLOSED  "%s" (CU id=%s) — skipping', taskName, taskId);
-        continue;
-      }
-      client.closeOrphanTask(taskId, CLOSED_STATUS);
+      client.deleteTask(taskId);
       summary.closed++;
-      Logger.log('CLOSED   "%s" (CU id=%s) — SF ID not in CSV', taskName, taskId);
+      Logger.log('DELETED  "%s" (CU id=%s) — SF ID not in Sheet (reassigned or removed)', taskName, taskId);
     } catch (e) {
       const msg = 'Failed to CLOSE orphan "' + taskName + '" (CU id=' + taskId + '): ' + e.message;
       Logger.log('ERROR: ' + msg);
