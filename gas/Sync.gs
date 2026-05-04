@@ -62,7 +62,7 @@ function _parseRows(headers, rows, fieldMap) {
       if (canonical) canonicalRow[canonical] = (row[j] || '').trim();
     }
 
-    const sfId = (canonicalRow['sf_opportunity_id'] || '').trim();
+    const sfId = (canonicalRow['sf_opportunity_id'] || '').trim().slice(0, 15);
     if (!sfId) {
       Logger.log('Row %d skipped: missing Opportunity ID.', i + 1);
       skipped++;
@@ -161,7 +161,7 @@ function matchOpportunities(opportunities, clickupTasks, sfIdFieldId) {
   for (const task of clickupTasks) {
     const sfId = getCustomFieldValue(task, sfIdFieldId);
     if (!sfId) continue;
-    const key = sfId.trim();
+    const key = sfId.trim().slice(0, 15);
     if (taskIndex[key]) {
       Logger.log(
         'WARNING: Duplicate ClickUp tasks for SF ID "%s": keeping task id=%s, ignoring task id=%s. ' +
