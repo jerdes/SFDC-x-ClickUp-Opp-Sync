@@ -107,7 +107,7 @@ function loadSettings() {
     gmailAttachmentNamePattern: optional('GMAIL_ATTACHMENT_NAME_PATTERN', '.csv'),
     clickupApiToken:            require('CLICKUP_API_TOKEN'),
     clickupListId:              require('CLICKUP_LIST_ID'),
-    clickupBaseUrl:             optional('CLICKUP_BASE_URL', 'https://api.clickup.com/api/v2'),
+    clickupBaseUrl:             optional('CLICKUP_BASE_URL', 'https://api.clickup-stg.com/api/v2'),
     sheetsId:                   require('SHEETS_ID'),
     sheetsTabName:              optional('SHEETS_TAB_NAME', ''),
     clickupFieldIds:            clickupFieldIds,
